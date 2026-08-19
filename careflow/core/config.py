@@ -136,7 +136,17 @@ class Settings(BaseSettings):
     RETRIEVAL_TOP_K: int = int(os.getenv("RETRIEVAL_TOP_K", "5"))
     RETRIEVAL_CANDIDATE_K: int = int(os.getenv("RETRIEVAL_CANDIDATE_K", "20"))
     RERANK_TOP_N: int = int(os.getenv("RERANK_TOP_N", "10"))
-    RETRIEVAL_SCORE_THRESHOLD: float = float(os.getenv("RETRIEVAL_SCORE_THRESHOLD", "0.20"))
+    # Raised 0.20 -> 0.50 from benchmark evidence (scripts/benchmark_retrieval.py).
+    # At 0.20 every query returned the full k=5, but only 1 chunk was relevant
+    # (precision 0.200) -- the other 4 were noise from the administrative corpus, which
+    # the generator still had to read. Sweeping the threshold on the 8 labeled clinical
+    # queries: 0.20 -> precision 0.200 (5.0 chunks/query), 0.50 -> 0.500 (2.0),
+    # 0.55 -> 1.000 (1.0); keyword recall stayed 8/8 throughout, so no needed clinical
+    # fact was lost at any level. 0.50 is chosen over the better-scoring 0.55 to keep
+    # margin: the sweep covers 8 queries against 3 clinical documents, and correct
+    # matches here score 0.61-0.78 against ~0.42-0.49 for noise. Retune with the
+    # benchmark after expanding the corpus.
+    RETRIEVAL_SCORE_THRESHOLD: float = float(os.getenv("RETRIEVAL_SCORE_THRESHOLD", "0.50"))
     TRIAGE_GUIDELINE_TOP_K: int = int(os.getenv("TRIAGE_GUIDELINE_TOP_K", "3"))
 
     # Citation snippet length shown in the UI.

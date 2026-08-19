@@ -1,0 +1,116 @@
+{
+  "summary": {
+    "top1_accuracy": 1.0,
+    "mrr": 1.0,
+    "mean_precision_at_5": 0.6917,
+    "mean_keyword_recall": 1.0,
+    "mean_top1_score": 0.6874,
+    "hit_rate": 1.0
+  },
+  "results": [
+    {
+      "id": "htn-threshold",
+      "question": "At what systolic blood pressure does WHO recommend starting antihypertensive treatment?",
+      "expected_source": "WHO Guideline - Hypertension 2021",
+      "top1_source": "WHO Guideline - Hypertension 2021",
+      "top1_correct": true,
+      "top1_score": 0.7768,
+      "precision_at_5": 0.2,
+      "reciprocal_rank": 1.0,
+      "keyword_recall": 1.0,
+      "chunks_returned": 5
+    },
+    {
+      "id": "htn-firstline",
+      "question": "Which drug classes are first-line for hypertension?",
+      "expected_source": "WHO Guideline - Hypertension 2021",
+      "top1_source": "WHO Guideline - Hypertension 2021",
+      "top1_correct": true,
+      "top1_score": 0.6616,
+      "precision_at_5": 1.0,
+      "reciprocal_rank": 1.0,
+      "keyword_recall": 1.0,
+      "chunks_returned": 1
+    },
+    {
+      "id": "htn-combination",
+      "question": "When is single-pill combination therapy recommended for blood pressure control?",
+      "expected_source": "WHO Guideline - Hypertension 2021",
+      "top1_source": "WHO Guideline - Hypertension 2021",
+      "top1_correct": true,
+      "top1_score": 0.636,
+      "precision_at_5": 0.5,
+      "reciprocal_rank": 1.0,
+      "keyword_recall": 1.0,
+      "chunks_returned": 2
+    },
+    {
+      "id": "dm-thresholds",
+      "question": "What fasting plasma glucose and A1C values are diagnostic for diabetes?",
+      "expected_source": "CDC Guideline - Diabetes Screening 2023",
+      "top1_source": "CDC Guideline - Diabetes Screening 2023",
+      "top1_correct": true,
+      "top1_score": 0.6085,
+      "precision_at_5": 1.0,
+      "reciprocal_rank": 1.0,
+      "keyword_recall": 1.0,
+      "chunks_returned": 1
+    },
+    {
+      "id": "dm-screening-age",
+      "question": "At what age should adults be screened for prediabetes and type 2 diabetes?",
+      "expected_source": "CDC Guideline - Diabetes Screening 2023",
+      "top1_source": "CDC Guideline - Diabetes Screening 2023",
+      "top1_correct": true,
+      "top1_score": 0.7591,
+      "precision_at_5": 0.5,
+      "reciprocal_rank": 1.0,
+      "keyword_recall": 1.0,
+      "chunks_returned": 2
+    },
+    {
+      "id": "asthma-maintenance",
+      "question": "What is the cornerstone of maintenance therapy for persistent asthma?",
+      "expected_source": "USPSTF Guideline - Asthma Management",
+      "top1_source": "USPSTF Guideline - Asthma Management",
+      "top1_correct": true,
+      "top1_score": 0.6405,
+      "precision_at_5": 1.0,
+      "reciprocal_rank": 1.0,
+      "keyword_recall": 1.0,
+      "chunks_returned": 1
+    },
+    {
+      "id": "asthma-exacerbation",
+      "question": "How should a severe acute asthma exacerbation be managed?",
+      "expected_source": "USPSTF Guideline - Asthma Management",
+      "top1_source": "USPSTF Guideline - Asthma Management",
+      "top1_correct": true,
+      "top1_score": 0.6977,
+      "precision_at_5": 0.3333,
+      "reciprocal_rank": 1.0,
+      "keyword_recall": 1.0,
+      "chunks_returned": 3
+    },
+    {
+      "id": "asthma-control",
+      "question": "How is asthma control assessed?",
+      "expected_source": "USPSTF Guideline - Asthma Management",
+      "top1_source": "USPSTF Guideline - Asthma Management",
+      "top1_correct": true,
+      "top1_score": 0.7188,
+      "precision_at_5": 1.0,
+      "reciprocal_rank": 1.0,
+      "keyword_recall": 1.0,
+      "chunks_returned": 1
+    }
+  ],
+  "metadata": {
+    "generated_at": "2026-08-19 23:55 UTC",
+    "n_queries": 8,
+    "top_k": 5,
+    "collection": "who_guidelines",
+    "embedding_model": "BAAI/bge-m3",
+    "embedding_provider": "auto"
+  }
+}

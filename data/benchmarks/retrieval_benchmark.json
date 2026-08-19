@@ -1,0 +1,53 @@
+{
+  "description": "In-domain retrieval benchmark for the who_guidelines collection. Each question is answerable from an indexed clinical guideline, and `expected_source` labels the document that must be retrieved. This makes precision@k, MRR, and hit rate diagnostic -- unlike the meddata QA corpus, whose rare-genetic-disease questions are not covered by WHO public-health guidelines at all, so scores there reflect corpus mismatch rather than retrieval quality.",
+  "queries": [
+    {
+      "id": "htn-threshold",
+      "question": "At what systolic blood pressure does WHO recommend starting antihypertensive treatment?",
+      "expected_source": "WHO Guideline - Hypertension 2021",
+      "expected_keywords": ["130", "systolic", "mmHg"]
+    },
+    {
+      "id": "htn-firstline",
+      "question": "Which drug classes are first-line for hypertension?",
+      "expected_source": "WHO Guideline - Hypertension 2021",
+      "expected_keywords": ["thiazide", "ACE", "calcium channel"]
+    },
+    {
+      "id": "htn-combination",
+      "question": "When is single-pill combination therapy recommended for blood pressure control?",
+      "expected_source": "WHO Guideline - Hypertension 2021",
+      "expected_keywords": ["combination", "single-pill", "adherence"]
+    },
+    {
+      "id": "dm-thresholds",
+      "question": "What fasting plasma glucose and A1C values are diagnostic for diabetes?",
+      "expected_source": "CDC Guideline - Diabetes Screening 2023",
+      "expected_keywords": ["126", "6.5", "A1C"]
+    },
+    {
+      "id": "dm-screening-age",
+      "question": "At what age should adults be screened for prediabetes and type 2 diabetes?",
+      "expected_source": "CDC Guideline - Diabetes Screening 2023",
+      "expected_keywords": ["35", "70", "overweight"]
+    },
+    {
+      "id": "asthma-maintenance",
+      "question": "What is the cornerstone of maintenance therapy for persistent asthma?",
+      "expected_source": "USPSTF Guideline - Asthma Management",
+      "expected_keywords": ["inhaled corticosteroid", "ICS"]
+    },
+    {
+      "id": "asthma-exacerbation",
+      "question": "How should a severe acute asthma exacerbation be managed?",
+      "expected_source": "USPSTF Guideline - Asthma Management",
+      "expected_keywords": ["oxygen", "corticosteroid", "beta-agonist"]
+    },
+    {
+      "id": "asthma-control",
+      "question": "How is asthma control assessed?",
+      "expected_source": "USPSTF Guideline - Asthma Management",
+      "expected_keywords": ["Asthma Control Test", "questionnaire"]
+    }
+  ]
+}
