@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Activity, BookOpen, Stethoscope, Search, FileText, ChevronRight, ShieldAlert } from "lucide-react";
+import { Activity, BookOpen, Stethoscope, Search, FileText, ChevronRight, ShieldAlert, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
