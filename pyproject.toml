@@ -56,6 +56,15 @@ pythonpath = "."
 testpaths = ["tests"]
 python_files = "test_*.py"
 python_functions = "test_*"
+asyncio_mode = "auto"
+# Integration tests hit live Qdrant/Gemini/Groq and exhaust the 15 req/min Gemini free
+# tier, so they are excluded by default. Run them deliberately with:
+#   pytest -m integration
+addopts = "-m 'not integration'"
+markers = [
+    "integration: requires live external services (Qdrant, LLM APIs) and real API keys",
+    "slow: downloads models or otherwise takes >10s",
+]
 
 [tool.ruff]
 line-length = 110

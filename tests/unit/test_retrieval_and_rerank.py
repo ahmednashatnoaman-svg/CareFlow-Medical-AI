@@ -2,6 +2,10 @@
 
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from careflow.services import embedding_service
 from careflow.services.reranker_service import CrossEncoderReranker
 from careflow.services.retrieval_service import RetrievalEngine
 
@@ -63,9 +67,28 @@ def test_cross_encoder_rerank_falls_back_to_heuristic_when_model_unavailable():
     assert "chest pain" in reranked[0]["content"].lower()
 
 
-def test_embed_text_returns_correct_vector_dimension():
+def test_embed_text_returns_correct_vector_dimension(monkeypatch):
+    # Pin the mock provider. Without this the auto chain reaches the local
+    # sentence-transformers provider and downloads BAAI/bge-m3 (~2.3GB), which OOM-killed
+    # the whole pytest process (exit 137) -- a unit test must never touch the network.
+    monkeypatch.setattr(embedding_service.settings, "EMBEDDING_PROVIDER", "mock")
     engine = RetrievalEngine()
     vec = engine._embed_text("chest pain radiating to arm")
     assert isinstance(vec, list)
     assert len(vec) == 1024
+
+
+def test_embed_text_raises_when_no_provider_available(monkeypatch):
+    """An unavailable embedder must fail loudly, never return a usable-looking vector.
+
+    Regression guard for the original behaviour: both embedding paths fell back to a
+    deterministic random vector, so retrieval silently returned arbitrary chunks with
+    plausible similarity scores instead of reporting the outage.
+    """
+    monkeypatch.setattr(embedding_service.settings, "EMBEDDING_PROVIDER", "remote")
+    monkeypatch.setattr(embedding_service.settings, "EMBEDDER_ENDPOINT_URL", "")
+
+    engine = RetrievalEngine()
+    with pytest.raises(embedding_service.EmbeddingUnavailableError):
+        engine._embed_text("chest pain")
 

@@ -10,6 +10,7 @@ import logging
 from typing import Any, Dict, List, Optional
 from qdrant_client import AsyncQdrantClient
 from careflow.core.config import settings
+from careflow.services.embedding_service import embed_text
 
 logger = logging.getLogger(__name__)
 
@@ -37,80 +38,17 @@ class RetrievalEngine:
             self.qdrant = None
 
     def _embed_text(self, text: str, vector_size: Optional[int] = None) -> List[float]:
+        """Embed `text` via the shared embedding service.
+
+        Delegates to careflow.services.embedding_service, which is the single provider
+        chain for the whole app. This method used to carry its own four-provider cascade
+        ending in a random vector -- a chain that diverged from the one in
+        dialogue_service, so the two RAG modes could embed the same query differently.
+
+        Raises EmbeddingUnavailableError when no provider works, rather than returning a
+        placeholder that would make irrelevant retrieval look successful.
         """
-        Generates a 1024-d BAAI/bge-m3 vector embedding for text queries via the cloud Modal endpoint.
-        Falls back to local embedding libraries (fastembed / FlagEmbedding / sentence-transformers)
-        or deterministic mock if cloud endpoint is unreachable or offline.
-        """
-        # VECTOR_SIZE/EMBEDDER_ENDPOINT_URL/EMBEDDING_MODEL are declared Settings fields --
-        # accessed directly rather than via getattr(settings, name, literal_default), which
-        # would silently duplicate (and could drift from) the real default in config.py.
-        size = vector_size or settings.VECTOR_SIZE
-        raw_url = settings.EMBEDDER_ENDPOINT_URL
-
-        # Attempt 1: Cloud Modal Embedder Microservice Endpoint
-        if raw_url:
-            base_url = raw_url.rstrip("/")
-            endpoint_url = base_url if "/api/v1/embed" in base_url else f"{base_url}/api/v1/embed"
-            try:
-                import httpx
-
-                with httpx.Client(timeout=15.0, follow_redirects=True) as client:
-                    response = client.post(endpoint_url, json={"text": text, "normalize": True})
-                    if response.status_code == 200:
-                        res_data = response.json()
-                        vec = res_data.get("embedding") or (
-                            res_data.get("embeddings")[0] if res_data.get("embeddings") else None
-                        )
-                        if vec and len(vec) == size:
-                            logger.info("Successfully fetched cloud BGE-M3 embedding vector (dim=%d)", len(vec))
-                            return vec
-            except Exception as exc:
-                logger.warning("Cloud BGE-M3 embedder endpoint call failed (%s). Falling back to local models.", exc)
-
-        # Attempt 2: fastembed (ONNX-based, aligns with data-ingestion BAAI/bge-m3)
-        try:
-            from fastembed import TextEmbedding
-            model_name = settings.EMBEDDING_MODEL
-            _model = TextEmbedding(model_name=model_name)
-            embeddings = list(_model.embed([text]))
-            vec = embeddings[0].tolist()
-            if len(vec) == size:
-                return vec
-        except Exception:
-            pass
-
-        # Attempt 3: FlagEmbedding
-        try:
-            from FlagEmbedding import BGEM3FlagModel
-            model_name = settings.EMBEDDING_MODEL
-            flag_model = BGEM3FlagModel(model_name, use_fp16=False)
-            res = flag_model.encode([text], return_dense=True)
-            vec = res["dense_vecs"][0].tolist()
-            if len(vec) == size:
-                return vec
-        except Exception:
-            pass
-
-        # Attempt 4: sentence-transformers
-        try:
-            from sentence_transformers import SentenceTransformer
-            model_name = settings.EMBEDDING_MODEL
-            st_model = SentenceTransformer(model_name)
-            vec = st_model.encode(text).tolist()
-            if len(vec) == size:
-                return vec
-        except Exception:
-            pass
-
-        # Attempt 5: Deterministic fallback embedding vector (for offline/test environments without PyTorch)
-        logger.warning(
-            "Cloud embedder endpoint unreachable and local models unavailable. Using fallback embedding vector."
-        )
-        import hashlib, random
-        seed = int(hashlib.md5(text.encode("utf-8")).hexdigest(), 16)
-        rng = random.Random(seed)
-        return [rng.uniform(-0.1, 0.1) for _ in range(size)]
+        return embed_text(text, vector_size or settings.VECTOR_SIZE)
 
     async def search_chunks(
         self,

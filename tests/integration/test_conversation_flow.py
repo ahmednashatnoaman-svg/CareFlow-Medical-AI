@@ -1,5 +1,12 @@
 """Integration tests for full conversation API workflow."""
 
+import pytest
+
+# Requires live external services (Qdrant, Gemini/Groq) and real API keys, and the
+# Gemini free tier caps at 15 req/min -- these exhaust it. Excluded from the default
+# run via pyproject addopts; invoke deliberately with `pytest -m integration`.
+pytestmark = pytest.mark.integration
+
 
 def test_full_conversation_lifecycle(client):
     # 1. Start Conversation

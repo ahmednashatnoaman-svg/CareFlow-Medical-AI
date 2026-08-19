@@ -56,6 +56,14 @@ class Settings(BaseSettings):
     # Cache Settings
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
+    # Triage session persistence.
+    #   auto   -> Redis when APP_ENV=production and REDIS_URL is reachable, else in-memory
+    #   redis  -> always Redis (required for serverless / multi-replica correctness)
+    #   memory -> always in-memory (single-process only)
+    SESSION_BACKEND: str = os.getenv("SESSION_BACKEND", "auto")
+    SESSION_TTL_SECONDS: int = int(os.getenv("SESSION_TTL_SECONDS", "3600"))
+    SESSION_MAX: int = int(os.getenv("SESSION_MAX", "1000"))
+
     # Vector DB (Qdrant) Settings
     QDRANT_HOST: str = os.getenv("QDRANT_HOST", "localhost")
     QDRANT_PORT: int = int(os.getenv("QDRANT_PORT", "6333"))
@@ -69,6 +77,15 @@ class Settings(BaseSettings):
     # LLM, ASR & Embedding Settings
     EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "BAAI/bge-m3")
     VECTOR_SIZE: int = int(os.getenv("VECTOR_SIZE", "1024"))
+    # Provider chain for careflow.services.embedding_service.
+    #   auto   -> remote (Modal), then local (sentence-transformers)
+    #   remote -> hosted endpoint only
+    #   local  -> local model only
+    #   mock   -> deterministic fake vectors; TESTS ONLY, never a production value.
+    # "mock" is deliberately excluded from the auto chain so an unreachable embedder can
+    # never silently degrade retrieval to random vectors.
+    EMBEDDING_PROVIDER: str = os.getenv("EMBEDDING_PROVIDER", "auto")
+    EMBEDDING_TIMEOUT: float = float(os.getenv("EMBEDDING_TIMEOUT", "15.0"))
     SBG_API_KEY: str = os.getenv("SBG_API_KEY", "mock-key")
     SBG_BASE_URL: str = os.getenv("SBG_BASE_URL", "http://apiaccess.iti.net.eg")
     SBG_MODEL: str = os.getenv("SBG_MODEL", "openai.gpt-oss-120b-1:0")

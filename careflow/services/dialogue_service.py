@@ -10,64 +10,10 @@ from typing import Any, Dict, List, Optional
 from qdrant_client import AsyncQdrantClient, QdrantClient
 from qdrant_client.http import models as qmodels
 from careflow.core.config import settings
+from careflow.services.embedding_service import embed_text
 from careflow.services.llm_client import llm_client
 
 logger = logging.getLogger(__name__)
-
-# Global cache for transformer model to avoid reload latency
-_TOKENIZER = None
-_TRANSFORMER_MODEL = None
-
-
-def get_embedding_vector(text: str, vector_size: int = 1024) -> List[float]:
-    """Generates 1024-dim BAAI/bge-m3 dense vector embedding for queries."""
-    global _TOKENIZER, _TRANSFORMER_MODEL
-
-    # Method 1: Hugging Face Transformers with safetensors
-    try:
-        import torch
-        from transformers import AutoModel, AutoTokenizer
-
-        if _TOKENIZER is None or _TRANSFORMER_MODEL is None:
-            logger.info("Loading BGE-M3 embedding model '%s' (safetensors)...", settings.EMBEDDING_MODEL)
-            _TOKENIZER = AutoTokenizer.from_pretrained(settings.EMBEDDING_MODEL)
-            _TRANSFORMER_MODEL = AutoModel.from_pretrained(settings.EMBEDDING_MODEL, use_safetensors=True)
-            _TRANSFORMER_MODEL.eval()
-
-        inputs = _TOKENIZER(text, return_tensors="pt", padding=True, truncation=True, max_length=512)
-        with torch.no_grad():
-            outputs = _TRANSFORMER_MODEL(**inputs)
-            # CLS token representation normalized
-            vec = torch.nn.functional.normalize(outputs.last_hidden_state[:, 0], p=2, dim=1)[0].tolist()
-            if len(vec) == vector_size:
-                return vec
-    except Exception as e:
-        logger.warning("Local Transformers BGE-M3 embedding failed (%s). Checking fallbacks.", e)
-
-    # Method 2: Cloud Modal Endpoint (if configured)
-    raw_url = settings.EMBEDDER_ENDPOINT_URL
-    if raw_url:
-        try:
-            import httpx
-            base_url = raw_url.rstrip("/")
-            endpoint = base_url if "/api/v1/embed" in base_url else f"{base_url}/api/v1/embed"
-            with httpx.Client(timeout=10.0) as client:
-                res = client.post(endpoint, json={"text": text, "normalize": True})
-                if res.status_code == 200:
-                    data = res.json()
-                    vec = data.get("embedding") or (data.get("embeddings")[0] if data.get("embeddings") else None)
-                    if vec and len(vec) == vector_size:
-                        return vec
-        except Exception as e:
-            logger.warning("Modal cloud embedder endpoint failed (%s)", e)
-
-    # Method 3: Deterministic pseudo-random embedding for test environments
-    import hashlib, random
-    logger.warning("Using deterministic fallback embedding.")
-    seed = int(hashlib.md5(text.encode("utf-8")).hexdigest(), 16)
-    rng = random.Random(seed)
-    return [rng.uniform(-0.1, 0.1) for _ in range(vector_size)]
-
 
 class DialogueRAGService:
     """Vector RAG Assistant grounded in WHO medical guidelines."""
@@ -107,7 +53,7 @@ class DialogueRAGService:
         logger.info("Executing WHO guidelines vector search for query: '%s' (top_k=%d)", query[:80], top_k)
         
         # Embed query text
-        query_vector = await asyncio.to_thread(get_embedding_vector, query, settings.VECTOR_SIZE)
+        query_vector = await asyncio.to_thread(embed_text, query, settings.VECTOR_SIZE)
 
         client = self.get_async_client()
         hits = []

@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional, Set
 from careflow.core.config import settings
 from careflow.services.llm_client import llm_client
 from careflow.services.primekg_service import primekg_service
+from careflow.services.session_store import SessionStore, build_session_store
 
 logger = logging.getLogger(__name__)
 
@@ -133,23 +134,80 @@ class TriageSession:
         self.last_graph_evidence: Optional[Dict[str, Any]] = None
         self.last_stats: Optional[Dict[str, Any]] = None
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize for the session store. Sets become lists to stay JSON-encodable."""
+        return {
+            "session_id": self.session_id,
+            "language": self.language,
+            "positive_symptoms": sorted(self.positive_symptoms),
+            "negated_symptoms": sorted(self.negated_symptoms),
+            "turn_count": self.turn_count,
+            "max_turns": self.max_turns,
+            "last_target_symptom": self.last_target_symptom,
+            "last_options_english": self.last_options_english,
+            "last_options_arabic": self.last_options_arabic,
+            "socrates_tracker": self.socrates_tracker,
+            "socrates_score": self.socrates_score,
+            "is_complete": self.is_complete,
+            "history": self.history,
+            "diagnostic_report": self.diagnostic_report,
+            "last_graph_evidence": self.last_graph_evidence,
+            "last_stats": self.last_stats,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "TriageSession":
+        """Rebuild from stored state, tolerating fields absent in older payloads."""
+        s = cls(session_id=data["session_id"], language=data.get("language", "en"))
+        s.positive_symptoms = set(data.get("positive_symptoms", []))
+        s.negated_symptoms = set(data.get("negated_symptoms", []))
+        s.turn_count = data.get("turn_count", 0)
+        s.max_turns = data.get("max_turns", settings.MAX_QUESTIONS)
+        s.last_target_symptom = data.get("last_target_symptom")
+        s.last_options_english = data.get("last_options_english", [])
+        s.last_options_arabic = data.get("last_options_arabic", [])
+        s.socrates_tracker = data.get("socrates_tracker", s.socrates_tracker)
+        s.socrates_score = data.get("socrates_score", 0)
+        s.is_complete = data.get("is_complete", False)
+        s.history = data.get("history", [])
+        s.diagnostic_report = data.get("diagnostic_report")
+        s.last_graph_evidence = data.get("last_graph_evidence")
+        s.last_stats = data.get("last_stats")
+        return s
+
 
 class TriageOrchestratorService:
     """Manages triage sessions, graph reasoning, and diagnostic reporting."""
 
-    def __init__(self):
-        self.sessions: Dict[str, TriageSession] = {}
+    def __init__(self, store: Optional[SessionStore] = None):
+        # Injectable so tests can supply a deterministic store without touching Redis.
+        self._store = store or build_session_store()
 
     def get_or_create_session(self, session_id: Optional[str] = None, language: str = "en") -> TriageSession:
-        if not session_id or session_id not in self.sessions:
-            sid = session_id or str(uuid.uuid4())
-            self.sessions[sid] = TriageSession(session_id=sid, language=language)
-        return self.sessions[session_id or sid]
+        """Load an existing session or start a new one.
+
+        Callers must persist mutations with `save_session`; the store may live out of
+        process, so mutating the returned object is no longer sufficient on its own.
+        """
+        sid = session_id or str(uuid.uuid4())
+        stored = self._store.get(sid)
+        if stored is not None:
+            return TriageSession.from_dict(stored)
+
+        session = TriageSession(session_id=sid, language=language)
+        self._store.set(sid, session.to_dict())
+        return session
+
+    def save_session(self, session: TriageSession) -> None:
+        """Write session state back. Required after every turn."""
+        self._store.set(session.session_id, session.to_dict())
 
     def reset_session(self, session_id: str) -> TriageSession:
-        lang = self.sessions[session_id].language if session_id in self.sessions else "en"
-        self.sessions[session_id] = TriageSession(session_id=session_id, language=lang)
-        return self.sessions[session_id]
+        existing = self._store.get(session_id)
+        lang = (existing or {}).get("language", "en")
+        session = TriageSession(session_id=session_id, language=lang)
+        self._store.set(session_id, session.to_dict())
+        return session
 
     def extract_symptoms_from_input(
         self,
@@ -281,6 +339,7 @@ Extract positive and negated symptoms:"""
 
             final_text = closing_message_ar if session.language == "ar" else closing_message_en
             session.history.append({"role": "assistant", "content": final_text})
+            self.save_session(session)
 
             return {
                 "session_id": session.session_id,
@@ -339,6 +398,7 @@ Current SOCRATES Slots: {json.dumps(session.socrates_tracker)}
 
         assistant_msg = outbound_payload.get("empathy_and_question", "Could you please describe how you are feeling?")
         session.history.append({"role": "assistant", "content": assistant_msg})
+        self.save_session(session)
 
         return {
             "session_id": session.session_id,

@@ -3,18 +3,17 @@
 Initializes FastAPI app, middleware, routers, CORS, static files, and lifespan handlers.
 """
 
-import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 from careflow.api.router import api_router
 from careflow.core.config import settings
 from careflow.core.logging import logger
 from careflow.core.dependencies.deps import init_db
 from careflow.core.middleware.logging_middleware import RequestIDLoggingMiddleware
 from careflow.schemas.common import ApiErrorResponse
+from careflow.core.version import API_VERSION
 from careflow.services.primekg_service import primekg_service
 
 
@@ -32,20 +31,29 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title=settings.APP_NAME,
-    version="2.5.0",
+    version=API_VERSION,
     description="Dual-Mode Medical Chatbot: Graph RAG Triage & WHO Guidelines Vector RAG",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
 )
 
-# Add CORS Middleware
+# CORS. A wildcard origin cannot be combined with credentialed requests (the Fetch spec
+# forbids it and browsers reject the response), so credentials are enabled only when an
+# explicit origin allowlist is configured.
+_cors_origins = settings.allowed_origins_list
+_wildcard = "*" in _cors_origins
+if _wildcard and settings.APP_ENV == "production":
+    logger.warning(
+        "ALLOWED_ORIGINS is '*' in production. Set an explicit origin allowlist "
+        "(e.g. https://your-app.vercel.app) to enable credentialed requests."
+    )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins_list,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_cors_origins,
+    allow_credentials=not _wildcard,
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
 )
 
 # Add Request ID & Access Logging Middleware
@@ -54,23 +62,15 @@ app.add_middleware(RequestIDLoggingMiddleware)
 # Register API Router
 app.include_router(api_router)
 
-# Mount Static Files for Web Interface
-static_dir = os.path.join(os.path.dirname(__file__), "static")
-if os.path.exists(static_dir):
-    app.mount("/static", StaticFiles(directory=static_dir), name="static")
-
-
-@app.get("/", tags=["UI"])
+@app.get("/", tags=["Service"])
 async def root_index():
-    """Serves the interactive web interface."""
-    index_path = os.path.join(os.path.dirname(__file__), "static", "index.html")
-    if os.path.exists(index_path):
-        return FileResponse(index_path)
+    """Service descriptor. The user-facing UI is the Next.js app, not this API."""
     return {
         "status": "online",
         "service": settings.APP_NAME,
-        "version": "2.5.0",
+        "version": API_VERSION,
         "docs": "/docs",
+        "api_base": "/api/v1",
     }
 
 
@@ -80,7 +80,7 @@ async def root_health():
     return {
         "status": "ok",
         "service": settings.APP_NAME,
-        "version": "2.5.0",
+        "version": API_VERSION,
         "environment": settings.APP_ENV,
         "modes": {
             "mode_1_triage_graph_rag": "active",
@@ -92,13 +92,26 @@ async def root_health():
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Global exception handler."""
-    logger.error(f"Unhandled exception on {request.url.path}: {exc}", exc_info=True)
+    request_id = getattr(request.state, "request_id", None)
+    logger.error(
+        "Unhandled exception on %s (request_id=%s): %s",
+        request.url.path,
+        request_id,
+        exc,
+        exc_info=True,
+    )
+    # Upstream driver/SDK exceptions routinely embed connection strings and API keys in
+    # their message, so the raw text is exposed only under DEBUG. The request id gives
+    # users something actionable to quote without leaking internals.
+    detail = str(exc) if settings.DEBUG else "An internal server error occurred"
+    if request_id and not settings.DEBUG:
+        detail = f"{detail} (request_id={request_id})"
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content=ApiErrorResponse(
             success=False,
             error_code="INTERNAL_SERVER_ERROR",
-            message=str(exc) if settings.DEBUG else "An internal server error occurred",
+            message=detail,
         ).model_dump(),
     )
 

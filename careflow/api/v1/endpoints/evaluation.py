@@ -1,22 +1,49 @@
-import os
+"""Quantitative evaluation metrics endpoint.
+
+Serves the artifact written by `scripts/evaluate_rag.py`. Retrieval and generation
+metrics are reported separately so each stage of the pipeline can be validated on its
+own, per the project's evaluation criteria.
+"""
+
 import json
-from fastapi import APIRouter
-from fastapi.responses import JSONResponse
+import logging
+from pathlib import Path
+
+from fastapi import APIRouter, HTTPException, status
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/evaluation", tags=["Evaluation Metrics"])
 
-@router.get("")
-async def get_evaluation_metrics():
-    """Retrieve quantitative evaluation metrics from the static JSON file."""
-    # The evaluation file is located in app/static/evaluation_results.json
-    results_path = os.path.join(os.path.dirname(__file__), "..", "..", "static", "evaluation_results.json")
-    
+# careflow/api/v1/endpoints/evaluation.py -> parents[3] == careflow/
+# The previous version used two `..` segments and resolved to careflow/api/static/,
+# which does not exist, so this endpoint returned 404 unconditionally and the dashboard
+# silently rendered its hardcoded placeholder numbers instead.
+RESULTS_PATH = Path(__file__).resolve().parents[3] / "static" / "evaluation_results.json"
+
+
+@router.get("", summary="Retrieve quantitative RAG evaluation metrics")
+async def get_evaluation_metrics() -> dict:
+    """Return the most recent evaluation run.
+
+    A 404 here means the evaluation has not been run yet -- callers must surface that as
+    "not measured" rather than falling back to invented figures.
+    """
+    if not RESULTS_PATH.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                "No evaluation results found. Run `python scripts/evaluate_rag.py` to "
+                "generate them."
+            ),
+        )
+
     try:
-        if os.path.exists(results_path):
-            with open(results_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            return JSONResponse(content=data)
-        else:
-            return JSONResponse(status_code=404, content={"error": "Evaluation results not found"})
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        with RESULTS_PATH.open(encoding="utf-8") as fh:
+            return json.load(fh)
+    except json.JSONDecodeError as exc:
+        logger.error("Evaluation results file is malformed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Evaluation results file is present but not valid JSON.",
+        ) from exc
