@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from careflow.core.config import settings
+from careflow.core.constants import LLM_EXTRACTION
 from careflow.schemas.state import ExtractedEntities
 from careflow.services.llm_clients import GeminiChatModel, SBGChatModel, extract_text_content
 
@@ -40,7 +41,7 @@ class EntityExtractionService:
                     openai_api_base=settings.GROQ_BASE_URL,
                     openai_api_key=settings.GROQ_API_KEY,
                     model_name=settings.GROQ_MODEL,
-                    temperature=0.0,
+                    temperature=LLM_EXTRACTION.temperature,
                 )
                 logger.info(f"Initialized Groq LLM fallback for entity extraction using model '{settings.GROQ_MODEL}'")
             except Exception as exc:

@@ -10,6 +10,7 @@ import os
 import re
 from typing import Any, Dict, List, Optional
 from careflow.core.config import settings
+from careflow.core.constants import LLM_TRANSLATION, LLM_TRANSLATION_JSON
 
 logger = logging.getLogger(__name__)
 
@@ -195,7 +196,11 @@ Output ONLY the clean English translation, without quotes or additional text.
 
 Patient: "{arabic_text}"
 Translation:"""
-        return self.generate_text(prompt=prompt, temperature=0.1, max_tokens=200)
+        return self.generate_text(
+            prompt=prompt,
+            temperature=LLM_TRANSLATION.temperature,
+            max_tokens=LLM_TRANSLATION.max_tokens,
+        )
 
     def translate_agent_to_arabic(self, english_json: Dict[str, Any]) -> Dict[str, Any]:
         """Translates clinical English question & options JSON payload to natural Egyptian Arabic."""
@@ -207,7 +212,11 @@ English JSON:
 {json.dumps(english_json, indent=2, ensure_ascii=False)}
 """
         try:
-            return self.generate_json(prompt=prompt, temperature=0.2, max_tokens=1000)
+            return self.generate_json(
+                prompt=prompt,
+                temperature=LLM_TRANSLATION_JSON.temperature,
+                max_tokens=LLM_TRANSLATION_JSON.max_tokens,
+            )
         except Exception as e:
             logger.warning("Agent outbound Arabic translation failed: %s. Returning English payload.", e)
             return english_json

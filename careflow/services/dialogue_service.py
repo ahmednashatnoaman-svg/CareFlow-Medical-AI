@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 from qdrant_client import AsyncQdrantClient, QdrantClient
 from qdrant_client.http import models as qmodels
 from careflow.core.config import settings
+from careflow.core.constants import LLM_GROUNDED_ANSWER, LOG_QUERY_PREVIEW_CHARS
 from careflow.services.embedding_service import embed_text
 from careflow.services.llm_client import llm_client
 
@@ -30,7 +31,7 @@ class DialogueRAGService:
             self._sync_client = QdrantClient(
                 url=self.qdrant_url,
                 api_key=self.api_key,
-                timeout=10.0,
+                timeout=settings.QDRANT_TIMEOUT,
             )
         return self._sync_client
 
@@ -39,17 +40,26 @@ class DialogueRAGService:
             self._async_client = AsyncQdrantClient(
                 url=self.qdrant_url,
                 api_key=self.api_key,
-                timeout=10.0,
+                timeout=settings.QDRANT_TIMEOUT,
             )
         return self._async_client
 
     async def search_guidelines(
         self,
         query: str,
-        top_k: int = 5,
-        score_threshold: float = 0.20,
+        top_k: int | None = None,
+        score_threshold: float | None = None,
     ) -> List[Dict[str, Any]]:
-        """Searches who_guidelines collection in Qdrant for semantic matches."""
+        """Searches who_guidelines collection in Qdrant for semantic matches.
+
+        `top_k` and `score_threshold` default to the configured values rather than to
+        literals baked into the signature, so retrieval breadth is tunable per
+        deployment without a code change.
+        """
+        top_k = top_k if top_k is not None else settings.RETRIEVAL_TOP_K
+        score_threshold = (
+            score_threshold if score_threshold is not None else settings.RETRIEVAL_SCORE_THRESHOLD
+        )
         logger.info("Executing WHO guidelines vector search for query: '%s' (top_k=%d)", query[:80], top_k)
         
         # Embed query text
@@ -115,10 +125,12 @@ class DialogueRAGService:
     async def answer_question(
         self,
         query: str,
-        top_k: int = 5,
+        top_k: int | None = None,
         conversation_history: Optional[List[Dict[str, str]]] = None,
     ) -> Dict[str, Any]:
         """Performs end-to-end RAG over WHO guidelines with source attribution."""
+        top_k = top_k if top_k is not None else settings.RETRIEVAL_TOP_K
+
         # 1. Retrieve relevant chunks
         chunks = await self.search_guidelines(query=query, top_k=top_k)
 
@@ -161,8 +173,8 @@ Please provide a well-structured, clear, and comprehensive answer grounded stric
             llm_client.generate_text,
             prompt=user_prompt,
             system_prompt=system_prompt,
-            temperature=0.2,
-            max_tokens=1500,
+            temperature=LLM_GROUNDED_ANSWER.temperature,
+            max_tokens=LLM_GROUNDED_ANSWER.max_tokens,
         )
 
         return {

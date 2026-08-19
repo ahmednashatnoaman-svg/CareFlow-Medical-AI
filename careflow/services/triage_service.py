@@ -12,6 +12,11 @@ import re
 import uuid
 from typing import Any, Dict, List, Optional, Set
 from careflow.core.config import settings
+from careflow.core.constants import (
+    LLM_CLINICAL_REPORT,
+    LLM_EXTRACTION,
+    LLM_INTERVIEW,
+)
 from careflow.services.llm_client import llm_client
 from careflow.services.primekg_service import primekg_service
 from careflow.services.session_store import SessionStore, build_session_store
@@ -246,8 +251,8 @@ Extract positive and negated symptoms:"""
             res = llm_client.generate_json(
                 prompt=prompt,
                 system_prompt=EXTRACTION_PROMPT,
-                temperature=0.0,
-                max_tokens=300,
+                temperature=LLM_EXTRACTION.temperature,
+                max_tokens=LLM_EXTRACTION.max_tokens,
             )
             extracted["positive_symptoms"].extend(res.get("positive_symptoms", []))
             extracted["negated_symptoms"].extend(res.get("negated_symptoms", []))
@@ -311,7 +316,7 @@ Extract positive and negated symptoms:"""
         # --- Step 3: PrimeKG Evidence & Graph Traversal ---
         graph_evidence = primekg_service.calculate_diagnostic_evidence(
             {"positive_symptoms": current_positives, "negated_symptoms": current_negated},
-            top_k=3,
+            top_k=settings.TRIAGE_GUIDELINE_TOP_K,
         )
         stats = primekg_service.calculate_statistical_confidence(graph_evidence)
         graph_candidates_res = primekg_service.get_next_symptom_candidates(current_positives, top_k_diseases=3)
@@ -369,8 +374,8 @@ Current SOCRATES Slots: {json.dumps(session.socrates_tracker)}
         agent_json = llm_client.generate_json(
             prompt=context_block + "\nGenerate the next structured triage question. Output ONLY raw JSON.",
             system_prompt=TRIAGE_AGENT_PROMPT,
-            temperature=0.2,
-            max_tokens=800,
+            temperature=LLM_INTERVIEW.temperature,
+            max_tokens=LLM_INTERVIEW.max_tokens,
         )
 
         # Update SOCRATES tracking from agent evaluation
@@ -435,8 +440,8 @@ Generate the formal clinical diagnostic report in valid JSON."""
             report = llm_client.generate_json(
                 prompt=prompt,
                 system_prompt=DIAGNOSTIC_REPORT_PROMPT,
-                temperature=0.1,
-                max_tokens=1000,
+                temperature=LLM_CLINICAL_REPORT.temperature,
+                max_tokens=LLM_CLINICAL_REPORT.max_tokens,
             )
             return report
         except Exception as e:

@@ -40,7 +40,7 @@ async def _check_qdrant() -> dict:
 
     try:
         client = dialogue_service.get_async_client()
-        collections = await asyncio.wait_for(client.get_collections(), timeout=5.0)
+        collections = await asyncio.wait_for(client.get_collections(), timeout=settings.HEALTH_CHECK_TIMEOUT)
         names = [c.name for c in collections.collections]
         target = dialogue_service.collection_name
         return {

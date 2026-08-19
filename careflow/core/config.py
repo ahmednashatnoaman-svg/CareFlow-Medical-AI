@@ -122,6 +122,26 @@ class Settings(BaseSettings):
     LANGSMITH_API_KEY: Optional[str] = os.getenv("LANGSMITH_API_KEY", None)
     LANGSMITH_PROJECT: str = os.getenv("LANGSMITH_PROJECT", "careflow-history-service")
 
+    # --- Operational tuning -----------------------------------------------------
+    # Values that legitimately differ per environment (network conditions, quota,
+    # latency budget). Previously these were literals scattered across the service
+    # layer, so tuning a timeout meant hunting through five files.
+    QDRANT_TIMEOUT: float = float(os.getenv("QDRANT_TIMEOUT", "10.0"))
+    QDRANT_SEARCH_TIMEOUT: float = float(os.getenv("QDRANT_SEARCH_TIMEOUT", "3.0"))
+    HEALTH_CHECK_TIMEOUT: float = float(os.getenv("HEALTH_CHECK_TIMEOUT", "5.0"))
+    SPEECH_TIMEOUT: float = float(os.getenv("SPEECH_TIMEOUT", "30.0"))
+
+    # Retrieval shape. CANDIDATE_K is the wide first pass fed to the cross-encoder;
+    # RERANK_TOP_N is what survives into the generation context.
+    RETRIEVAL_TOP_K: int = int(os.getenv("RETRIEVAL_TOP_K", "5"))
+    RETRIEVAL_CANDIDATE_K: int = int(os.getenv("RETRIEVAL_CANDIDATE_K", "20"))
+    RERANK_TOP_N: int = int(os.getenv("RERANK_TOP_N", "10"))
+    RETRIEVAL_SCORE_THRESHOLD: float = float(os.getenv("RETRIEVAL_SCORE_THRESHOLD", "0.20"))
+    TRIAGE_GUIDELINE_TOP_K: int = int(os.getenv("TRIAGE_GUIDELINE_TOP_K", "3"))
+
+    # Citation snippet length shown in the UI.
+    CITATION_SNIPPET_CHARS: int = int(os.getenv("CITATION_SNIPPET_CHARS", "300"))
+
     # Interview Termination Engine Parameters
     MIN_QUESTIONS: int = int(os.getenv("MIN_QUESTIONS", "3"))
     MAX_QUESTIONS: int = int(os.getenv("MAX_QUESTIONS", "8"))

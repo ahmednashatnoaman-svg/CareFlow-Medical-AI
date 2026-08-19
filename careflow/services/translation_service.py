@@ -10,6 +10,7 @@ from typing import List, Optional
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_openai import ChatOpenAI
 from careflow.core.config import settings
+from careflow.core.constants import LLM_TRANSLATION
 from careflow.services.llm_clients import GeminiChatModel, SBGChatModel, extract_text_content
 
 logger = logging.getLogger(__name__)
@@ -40,7 +41,7 @@ class TranslationService:
                     openai_api_base=settings.GROQ_BASE_URL,
                     openai_api_key=settings.GROQ_API_KEY,
                     model_name=settings.GROQ_MODEL,
-                    temperature=0.1,
+                    temperature=LLM_TRANSLATION.temperature,
                 )
                 logger.info(f"Initialized Groq LLM fallback using model '{settings.GROQ_MODEL}'")
             except Exception as e:

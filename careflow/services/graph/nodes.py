@@ -255,7 +255,7 @@ async def retrieval_node(state: InterviewState) -> Dict[str, Any]:
 
     query = _build_retrieval_query(state)
     try:
-        chunks = await retrieval_engine.search_chunks(query, top_k=20)
+        chunks = await retrieval_engine.search_chunks(query, top_k=settings.RETRIEVAL_CANDIDATE_K)
     except RuntimeError:
         logger.error("Embedding generation failed; proceeding with zero retrieved evidence", exc_info=True)
         return {"retrieved_chunks": [], "retrieval_degraded": True}

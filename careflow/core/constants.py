@@ -74,3 +74,48 @@ def get_mandatory_red_flags(chief_complaint: str) -> List[str]:
         if key != "default" and key in cc_lower:
             return flags
     return DEFAULT_RED_FLAGS_MAP["default"]
+
+
+# ---------------------------------------------------------------------------
+# LLM sampling profiles
+#
+# Temperature and length are properties of the *task*, not of the deployment, so they
+# live here as named profiles rather than in Settings. Naming them also documents intent:
+# EXTRACTION is deterministic because entity extraction must be reproducible, while
+# CLINICAL_REPORT allows a little variance for readable prose.
+#
+# Previously these were bare literals repeated across six services, where
+# `temperature=0.0` in one file and `temperature=0.2` in another carried no explanation.
+# ---------------------------------------------------------------------------
+
+class LLMProfile:
+    """A (temperature, max_tokens) pair for one class of LLM call."""
+
+    __slots__ = ("temperature", "max_tokens")
+
+    def __init__(self, temperature: float, max_tokens: int):
+        self.temperature = temperature
+        self.max_tokens = max_tokens
+
+
+# Structured extraction and option matching: must be reproducible run to run.
+LLM_EXTRACTION = LLMProfile(temperature=0.0, max_tokens=300)
+
+# Translation: near-deterministic, but a little slack for natural phrasing.
+LLM_TRANSLATION = LLMProfile(temperature=0.1, max_tokens=200)
+
+# Translating a structured JSON payload keeps the schema, so it needs more room.
+LLM_TRANSLATION_JSON = LLMProfile(temperature=0.2, max_tokens=1000)
+
+# Interview question generation: conversational, slight variation is desirable.
+LLM_INTERVIEW = LLMProfile(temperature=0.2, max_tokens=800)
+
+# Diagnostic report synthesis: low variance, long output.
+LLM_CLINICAL_REPORT = LLMProfile(temperature=0.1, max_tokens=1000)
+
+# Grounded guideline answers: low variance so claims track the retrieved context.
+LLM_GROUNDED_ANSWER = LLMProfile(temperature=0.2, max_tokens=1500)
+
+# Truncation used only in log lines, to keep records readable.
+LOG_QUERY_PREVIEW_CHARS = 80
+LOG_PAYLOAD_PREVIEW_CHARS = 200

@@ -44,7 +44,7 @@ class SpeechService:
         files = {"file": ("audio.wav", audio_bytes, content_type)}
 
         try:
-            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+            async with httpx.AsyncClient(timeout=settings.SPEECH_TIMEOUT, follow_redirects=True) as client:
                 response = await client.post(self.endpoint_url, files=files)
                 if response.status_code == 200:
                     data = response.json()

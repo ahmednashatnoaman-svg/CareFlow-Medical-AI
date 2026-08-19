@@ -25,14 +25,14 @@ class RetrievalEngine:
             self.qdrant = AsyncQdrantClient(
                 url=settings.QDRANT_URL,
                 api_key=settings.QDRANT_API_KEY,
-                timeout=3.0,
+                timeout=settings.QDRANT_SEARCH_TIMEOUT,
             )
         elif settings.QDRANT_HOST:
             self.qdrant = AsyncQdrantClient(
                 host=settings.QDRANT_HOST,
                 port=settings.QDRANT_PORT,
                 api_key=settings.QDRANT_API_KEY,
-                timeout=3.0,
+                timeout=settings.QDRANT_SEARCH_TIMEOUT,
             )
         else:
             self.qdrant = None
@@ -53,19 +53,21 @@ class RetrievalEngine:
     async def search_chunks(
         self,
         query: str,
-        top_k: int = 20,
+        top_k: int | None = None,
         chief_complaint_filter: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Performs search to retrieve top candidate medical chunks from Qdrant vector database.
 
         Args:
             query (str): Canonical clinical English patient query / symptoms.
-            top_k (int): Number of top candidate chunks to retrieve (Default K=20).
+            top_k (int | None): Candidates to retrieve; defaults to settings.RETRIEVAL_CANDIDATE_K.
             chief_complaint_filter (Optional[str]): Metadata section filter.
 
         Returns:
             List[Dict[str, Any]]: Top candidate chunks retrieved directly from Qdrant.
         """
+        top_k = top_k if top_k is not None else settings.RETRIEVAL_CANDIDATE_K
+
         logger.info("Executing Qdrant vector retrieval", extra={"query": query, "top_k": top_k})
 
         if not self.qdrant:
@@ -125,7 +127,7 @@ class RetrievalEngine:
 
             for col in target_collections:
                 try:
-                    res_hits = await asyncio.wait_for(_query(col), timeout=3.0)
+                    res_hits = await asyncio.wait_for(_query(col), timeout=settings.QDRANT_SEARCH_TIMEOUT)
                     if res_hits:
                         hits = res_hits
                         collection_name = col
