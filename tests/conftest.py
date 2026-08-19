@@ -2,9 +2,9 @@
 
 import asyncio
 import pytest
-from app.core.dependencies.deps import get_db
-from app.main import app
-from app.models.base import Base
+from careflow.core.dependencies.deps import get_db
+from careflow.main import app
+from careflow.models.base import Base
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 

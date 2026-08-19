@@ -9,10 +9,10 @@ Tests:
 
 import pytest
 from fastapi.testclient import TestClient
-from app.main import app
-from app.services.primekg_service import primekg_service
-from app.services.triage_service import triage_service
-from app.services.dialogue_service import dialogue_service
+from careflow.main import app
+from careflow.services.primekg_service import primekg_service
+from careflow.services.triage_service import triage_service
+from careflow.services.dialogue_service import dialogue_service
 
 
 @pytest.fixture

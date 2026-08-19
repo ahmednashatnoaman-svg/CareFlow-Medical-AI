@@ -62,4 +62,4 @@ line-length = 110
 target-version = "py311"
 
 [tool.setuptools]
-packages = ["app"]
+packages = ["careflow"]

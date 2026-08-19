@@ -3,7 +3,7 @@
 import asyncio
 import json
 from langchain_core.messages import AIMessage
-from app.services.orchestrator_service import LLMOrchestrator
+from careflow.services.orchestrator_service import LLMOrchestrator
 
 
 def test_generate_next_question_with_web_evidence():

@@ -1,7 +1,7 @@
 """Unit tests for Entity Extraction Service (Module 4)."""
 
 import asyncio
-from app.services.entity_extraction_service import EntityExtractionService
+from careflow.services.entity_extraction_service import EntityExtractionService
 
 
 def test_extract_entities_chest_pain():

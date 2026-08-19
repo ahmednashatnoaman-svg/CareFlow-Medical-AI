@@ -14,8 +14,8 @@ import sys
 # Ensure repository root is on sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from app.services.dialogue_service import dialogue_service
-from app.services.triage_service import triage_service
+from careflow.services.dialogue_service import dialogue_service
+from careflow.services.triage_service import triage_service
 
 
 async def run_triage_cli(language: str = "en"):

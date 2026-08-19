@@ -1,7 +1,7 @@
 """Unit tests for the Mayo Clinic Web Disease-Info Search Service."""
 
 import asyncio
-from app.services.web_search_service import MayoClinicSearchService
+from careflow.services.web_search_service import MayoClinicSearchService
 
 SEARCH_RESULTS_HTML = """
 <html><body>

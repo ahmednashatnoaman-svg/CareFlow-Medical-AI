@@ -2,7 +2,7 @@
 
 import asyncio
 from langchain_core.messages import AIMessage
-from app.services.translation_service import TranslationService
+from careflow.services.translation_service import TranslationService
 
 
 def test_translate_ar_to_en_with_llm():

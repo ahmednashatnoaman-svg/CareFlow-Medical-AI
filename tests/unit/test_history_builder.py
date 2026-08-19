@@ -1,7 +1,7 @@
 """Unit tests for MedicalHistoryBuilder service."""
 
-from app.services.history_builder_service import MedicalHistoryBuilder
-from app.schemas.history import StructuredMedicalHistory
+from careflow.services.history_builder_service import MedicalHistoryBuilder
+from careflow.schemas.history import StructuredMedicalHistory
 
 
 def test_build_structured_history_includes_risk_factors_and_symptoms():

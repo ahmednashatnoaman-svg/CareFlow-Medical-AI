@@ -1,7 +1,7 @@
 """Unit tests for Interview Termination Engine (Module 9)."""
 
 import pytest
-from app.services.termination_engine import InterviewTerminationEngine
+from careflow.services.termination_engine import InterviewTerminationEngine
 
 
 def test_coverage_score():

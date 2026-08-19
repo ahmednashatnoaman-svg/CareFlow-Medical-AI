@@ -5,7 +5,7 @@ Ingests clinical medical guideline documents into Qdrant collections.
 
 import asyncio
 import logging
-from app.services.knowledge_ingestion_service import KnowledgeIngestionService
+from careflow.services.knowledge_ingestion_service import KnowledgeIngestionService
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

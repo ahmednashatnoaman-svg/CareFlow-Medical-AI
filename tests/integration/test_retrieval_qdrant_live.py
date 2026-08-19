@@ -8,8 +8,8 @@ vector retrieval over medical knowledge collections.
 import logging
 import pytest
 from qdrant_client import AsyncQdrantClient
-from app.core.config import settings
-from app.services.retrieval_service import RetrievalEngine
+from careflow.core.config import settings
+from careflow.services.retrieval_service import RetrievalEngine
 
 logger = logging.getLogger(__name__)
 

@@ -17,15 +17,15 @@ if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
 
-from app.core.constants import STATUS_ACTIVE, STATUS_COMPLETED
-from app.core.dependencies.deps import get_session_context, init_db
-from app.services.graph.workflow import interview_app
-from app.crud.conversation_repository import ConversationRepository
-from app.crud.history_repository import HistoryRepository
-from app.schemas.history import StructuredMedicalHistory
-from app.services.conversation_manager import ConversationManager
-from app.services.knowledge_ingestion_service import KnowledgeIngestionService
-from app.services.speech_service import SpeechService
+from careflow.core.constants import STATUS_ACTIVE, STATUS_COMPLETED
+from careflow.core.dependencies.deps import get_session_context, init_db
+from careflow.services.graph.workflow import interview_app
+from careflow.crud.conversation_repository import ConversationRepository
+from careflow.crud.history_repository import HistoryRepository
+from careflow.schemas.history import StructuredMedicalHistory
+from careflow.services.conversation_manager import ConversationManager
+from careflow.services.knowledge_ingestion_service import KnowledgeIngestionService
+from careflow.services.speech_service import SpeechService
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("live_voice_pipeline")
@@ -205,7 +205,7 @@ async def run_live_pipeline(
 
         # Finalize and build structured medical history JSON if not already built
         if not state.get("structured_history"):
-            from app.services.graph.nodes import history_builder_node
+            from careflow.services.graph.nodes import history_builder_node
             state["should_continue"] = False
             state["status"] = STATUS_COMPLETED
             res = await history_builder_node(state)

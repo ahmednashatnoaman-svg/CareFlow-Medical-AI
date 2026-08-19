@@ -2,8 +2,8 @@
 
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
-from app.services.reranker_service import CrossEncoderReranker
-from app.services.retrieval_service import RetrievalEngine
+from careflow.services.reranker_service import CrossEncoderReranker
+from careflow.services.retrieval_service import RetrievalEngine
 
 
 def test_hierarchical_retrieval():

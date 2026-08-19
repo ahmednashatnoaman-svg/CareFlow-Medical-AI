@@ -5,8 +5,8 @@ Populates initial database demo records.
 
 import asyncio
 import logging
-from app.core.dependencies.deps import get_session_context, init_db
-from app.crud.conversation_repository import ConversationRepository
+from careflow.core.dependencies.deps import get_session_context, init_db
+from careflow.crud.conversation_repository import ConversationRepository
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

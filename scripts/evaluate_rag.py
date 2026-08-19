@@ -18,11 +18,11 @@ from ragas.metrics import (
     answer_similarity,
 )
 
-from app.services.dialogue_service import dialogue_service
+from careflow.services.dialogue_service import dialogue_service
 
 # Load LangChain/Ragas configuration 
 # We need to make sure API keys are loaded
-from app.core.config import settings
+from careflow.core.config import settings
 import os
 if settings.OPENAI_API_KEY:
     os.environ["OPENAI_API_KEY"] = settings.OPENAI_API_KEY
@@ -127,7 +127,7 @@ async def evaluate_rag():
             "detailed_results": results_df.to_dict(orient="records")
         }
         
-        output_path = "app/static/evaluation_results.json"
+        output_path = "careflow/static/evaluation_results.json"
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(final_output, f, indent=4, ensure_ascii=False)
             
