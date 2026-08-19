@@ -19,7 +19,7 @@ router = APIRouter(prefix="/evaluation", tags=["Evaluation Metrics"])
 # The previous version used two `..` segments and resolved to careflow/api/static/,
 # which does not exist, so this endpoint returned 404 unconditionally and the dashboard
 # silently rendered its hardcoded placeholder numbers instead.
-RESULTS_PATH = Path(__file__).resolve().parents[3] / "static" / "evaluation_results.json"
+RESULTS_PATH = Path(__file__).resolve().parents[3] / "artifacts" / "evaluation_results.json"
 
 
 @router.get("", summary="Retrieve quantitative RAG evaluation metrics")

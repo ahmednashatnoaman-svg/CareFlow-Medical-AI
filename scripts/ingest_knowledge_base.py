@@ -3,6 +3,14 @@
 Ingests clinical medical guideline documents into Qdrant collections.
 """
 
+import sys
+from pathlib import Path
+
+# Scripts are run directly (`python scripts/x.py`), so the repo root is not on sys.path
+# by default and `import careflow` would fail. Four of the seven scripts lacked this and
+# crashed on import.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 import asyncio
 import logging
 from careflow.services.knowledge_ingestion_service import KnowledgeIngestionService
