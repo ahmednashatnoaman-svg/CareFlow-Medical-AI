@@ -45,6 +45,10 @@ dev = [
     "ruff>=0.3.0",
     "mypy>=1.9.0",
 ]
+eval = [
+    "ragas>=0.1.0",
+    "pytest>=8.0.0"
+]
 
 [tool.pytest.ini_options]
 pythonpath = "."
@@ -58,8 +62,3 @@ target-version = "py311"
 
 [tool.setuptools]
 packages = ["app"]
-
-eval = [
-    "ragas>=0.1.0",
-    "pytest>=8.0.0"
-]
