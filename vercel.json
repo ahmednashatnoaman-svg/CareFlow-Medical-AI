@@ -1,13 +1,12 @@
 {
-  "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/index.py"
-    }
-  ],
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "rewrites": [{ "source": "/api/(.*)", "destination": "/api/index.py" }],
   "functions": {
-    "api/**/*.py": {
-      "excludeFiles": "{node_modules/**,.next/**,src/**,public/**,.venv/**,tests/**}"
+    "api/index.py": {
+      "memory": 1024,
+      "maxDuration": 60,
+      "excludeFiles": "{node_modules/**,.next/**,src/**,public/**,.venv/**,tests/**,notebooks/**,docs/**,data/meddata/**}"
     }
   }
 }
