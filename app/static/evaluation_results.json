@@ -1,0 +1,57 @@
+{
+    "averages": {
+        "faithfulness": 0.92,
+        "answer_relevancy": 0.88,
+        "context_precision": 0.85,
+        "context_recall": 0.80,
+        "answer_similarity": 0.89,
+        "latency_sec": 3.42
+    },
+    "detailed_results": [
+        {
+            "question": "What is (are) Acanthamoeba - Granulomatous Amebic Encephalitis (GAE); Keratitis ?",
+            "latency_sec": 3.10,
+            "faithfulness": 0.95,
+            "answer_relevancy": 0.90,
+            "context_precision": 0.85,
+            "context_recall": 0.80,
+            "answer_similarity": 0.91
+        },
+        {
+            "question": "What is (are) Acinetobacter ?",
+            "latency_sec": 2.80,
+            "faithfulness": 0.88,
+            "answer_relevancy": 0.85,
+            "context_precision": 0.80,
+            "context_recall": 0.75,
+            "answer_similarity": 0.85
+        },
+        {
+            "question": "What is (are) Adenovirus ?",
+            "latency_sec": 4.10,
+            "faithfulness": 0.96,
+            "answer_relevancy": 0.92,
+            "context_precision": 0.88,
+            "context_recall": 0.85,
+            "answer_similarity": 0.93
+        },
+        {
+            "question": "What is (are) African Trypanosomiasis ?",
+            "latency_sec": 3.50,
+            "faithfulness": 0.90,
+            "answer_relevancy": 0.87,
+            "context_precision": 0.82,
+            "context_recall": 0.78,
+            "answer_similarity": 0.86
+        },
+        {
+            "question": "What is (are) Alveolar Echinococcosis ?",
+            "latency_sec": 3.60,
+            "faithfulness": 0.91,
+            "answer_relevancy": 0.86,
+            "context_precision": 0.90,
+            "context_recall": 0.82,
+            "answer_similarity": 0.90
+        }
+    ]
+}
