@@ -45,7 +45,7 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -171,12 +171,19 @@ def run_ragas(
         from langchain_groq import ChatGroq
         from ragas import evaluate
         from ragas.metrics import (
-            answer_relevancy, answer_similarity, context_precision, context_recall, faithfulness,
+            AnswerRelevancy, answer_similarity, context_precision, context_recall, faithfulness,
         )
         from ragas.run_config import RunConfig
     except ImportError as exc:
         logger.error("ragas stack unavailable (%s). Install with: uv pip install -e '.[eval]'", exc)
         return {}
+
+    # AnswerRelevancy defaults to strictness=3 -- it scores relevance by asking the judge
+    # to generate 3 candidate questions per answer in one call (n=3). Groq's
+    # OpenAI-compatible endpoint rejects any n > 1 ("number must be at most 1"), which
+    # otherwise fails this metric on every sample, every retry, for the configured
+    # max_retries. strictness=1 asks for one completion per call, which Groq accepts.
+    answer_relevancy = AnswerRelevancy(strictness=1)
 
     usable = [(r, gt) for r, gt in zip(records, ground_truths) if not r["error"] and r["contexts"]]
     if not usable:
@@ -198,7 +205,7 @@ def run_ragas(
 
     judge = ChatGroq(model=settings.GROQ_MODEL, api_key=settings.GROQ_API_KEY)
     embedder = GoogleGenerativeAIEmbeddings(
-        model="models/embedding-001", google_api_key=settings.GEMINI_API_KEY
+        model=settings.RAGAS_JUDGE_EMBEDDING_MODEL, google_api_key=settings.GEMINI_API_KEY
     )
 
     if has_ground_truth:
@@ -220,15 +227,25 @@ def run_ragas(
             embeddings=embedder,
             run_config=RunConfig(max_workers=2, max_retries=10),
         )
+        # EvaluationResult isn't a Mapping in this ragas version -- dict(result) raises
+        # KeyError trying to iterate it as one. to_pandas() is the one public, stable
+        # accessor for both the per-sample rows and (via column means) the aggregate
+        # score, so it's used for both rather than a private/version-fragile attribute.
+        df = result.to_pandas()
     except Exception as exc:  # noqa: BLE001
         logger.error("ragas evaluation failed: %s", exc)
         return {}
 
-    scores = {k: v for k, v in dict(result).items() if isinstance(v, (int, float))}
+    def col_mean(col: str) -> Optional[float]:
+        if col not in df.columns:
+            return None
+        vals = df[col].dropna()
+        return round(float(vals.mean()), 4) if len(vals) else None
+
     return {
-        "retrieval": {k: round(float(scores[k]), 4) for k in RETRIEVAL if k in scores},
-        "generation": {k: round(float(scores[k]), 4) for k in GENERATION if k in scores},
-        "per_sample": result.to_pandas().to_dict(orient="records"),
+        "retrieval": {k: v for k in RETRIEVAL if (v := col_mean(k)) is not None},
+        "generation": {k: v for k in GENERATION if (v := col_mean(k)) is not None},
+        "per_sample": df.to_dict(orient="records"),
         "n_scored": len(usable),
     }
 
@@ -272,7 +289,14 @@ async def main() -> None:
     if diagnostics.get("mean_latency_sec") is not None:
         averages["latency_sec"] = diagnostics["mean_latency_sec"]
 
-    per_sample = {r["question"]: r for r in ragas_scores.get("per_sample", [])}
+    # ragas has used both "question" and "user_input" as the question-column name across
+    # versions; match on whichever this installed version's to_pandas() actually produced
+    # rather than assuming one, so a version bump doesn't silently zero out every
+    # per-sample score while the aggregate averages above keep working fine.
+    per_sample = {
+        (row.get("question") or row.get("user_input")): row
+        for row in ragas_scores.get("per_sample", [])
+    }
     detailed = []
     for r in records:
         row = {"question": r["question"], "latency_sec": r["latency_sec"],
