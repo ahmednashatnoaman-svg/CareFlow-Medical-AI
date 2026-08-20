@@ -222,7 +222,8 @@ Please provide a well-structured, clear, and comprehensive answer grounded stric
                     "source_file": c["source_file"],
                     "section": c["section"],
                     "relevance_score": c["score"],
-                    "snippet": c["text"][:300] + ("..." if len(c["text"]) > 300 else ""),
+                    "snippet": c["text"][:settings.CITATION_SNIPPET_CHARS]
+                    + ("..." if len(c["text"]) > settings.CITATION_SNIPPET_CHARS else ""),
                     # Full, untruncated chunk text -- the generator saw this, not the
                     # 300-char UI snippet above. Evaluation harnesses that check
                     # faithfulness against "snippet" are checking the answer against less
