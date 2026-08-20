@@ -12,8 +12,28 @@ Writes careflow/artifacts/evaluation_results.json, which GET /api/v1/evaluation 
 and the dashboard renders. The dashboard has no fallback values: whatever is missing here
 shows as "not measured" rather than as an invented number.
 
+Two question sources are available:
+
+  benchmark (default) data/benchmarks/retrieval_benchmark.json -- the same domain-matched
+            clinical queries scored for retrieval in scripts/benchmark_retrieval.py. These
+            *do* retrieve real context, so this is where generation quality on a working
+            retrieval path is actually measured. The benchmark file has no curated
+            reference answer, only expected_keywords, so only the ground-truth-free
+            metrics (faithfulness, answer_relevancy) are computed here -- context_recall
+            and answer_similarity need a real reference and are left unmeasured rather
+            than approximated from keywords.
+  meddata   data/meddata/*QA.csv[.zip] -- a broad general-medical QA corpus, largely *not*
+            covered by the indexed WHO/CDC/USPSTF guidelines. It exercises
+            faithfulness/relevancy plus context_precision/context_recall/answer_similarity
+            against each row's own reference "Answer", but most questions retrieve zero
+            in-domain context at a well-tuned threshold, so this is a hallucination/
+            refusal check ("does it say 'insufficient information' instead of guessing?"),
+            not a generation-quality measurement -- writes to a separate file rather than
+            standing in as the headline evaluation.
+
 Usage:
     python scripts/evaluate_rag.py [--sample-size N] [--top-k K] [--retrieval-only]
+    python scripts/evaluate_rag.py --dataset meddata
 """
 
 import argparse
@@ -68,6 +88,20 @@ def load_dataset(sample_size: int, seed: int = 42) -> pd.DataFrame:
     return df.sample(n=min(sample_size, len(df)), random_state=seed)
 
 
+def load_benchmark_dataset() -> pd.DataFrame:
+    """Load the domain-matched clinical queries used by scripts/benchmark_retrieval.py.
+
+    No "Answer" column: the benchmark labels expected_source and expected_keywords, not a
+    curated reference answer, so callers must not treat the empty Answer as ground truth.
+    """
+    path = Path(__file__).resolve().parents[1] / "data" / "benchmarks" / "retrieval_benchmark.json"
+    spec = json.loads(path.read_text(encoding="utf-8"))
+    df = pd.DataFrame(spec["queries"])
+    df["Answer"] = ""
+    logger.info("Loaded %d domain-matched clinical queries from %s", len(df), path.name)
+    return df.rename(columns={"question": "Question"})
+
+
 async def collect_predictions(questions: list[str], top_k: int) -> list[dict[str, Any]]:
     """Run the live RAG pipeline once per question, recording contexts and latency."""
     records: list[dict[str, Any]] = []
@@ -117,8 +151,16 @@ def retrieval_diagnostics(records: list[dict[str, Any]]) -> dict[str, float]:
     }
 
 
-def run_ragas(records: list[dict[str, Any]], ground_truths: list[str]) -> dict[str, Any]:
+def run_ragas(
+    records: list[dict[str, Any]], ground_truths: list[str], has_ground_truth: bool
+) -> dict[str, Any]:
     """Score with ragas, splitting metrics by pipeline stage.
+
+    `has_ground_truth` gates which metrics run: context_recall and answer_similarity both
+    compare against a reference answer, which the domain-matched benchmark dataset doesn't
+    have (see load_benchmark_dataset). Requesting them with an empty ground_truth string
+    wouldn't error -- ragas would just score against a false reference -- so the metric set
+    is chosen up front instead of relying on ragas to notice the input is meaningless.
 
     Returns {} when ragas or its judge model is unavailable; callers must then emit no
     numbers at all rather than substituting defaults.
@@ -141,12 +183,14 @@ def run_ragas(records: list[dict[str, Any]], ground_truths: list[str]) -> dict[s
         logger.error("No successful samples with retrieved context; skipping ragas.")
         return {}
 
-    ds = Dataset.from_dict({
-        "question":     [r["question"] for r, _ in usable],
-        "answer":       [r["answer"] for r, _ in usable],
-        "contexts":     [r["contexts"] for r, _ in usable],
-        "ground_truth": [gt for _, gt in usable],
-    })
+    ds_dict = {
+        "question": [r["question"] for r, _ in usable],
+        "answer":   [r["answer"] for r, _ in usable],
+        "contexts": [r["contexts"] for r, _ in usable],
+    }
+    if has_ground_truth:
+        ds_dict["ground_truth"] = [gt for _, gt in usable]
+    ds = Dataset.from_dict(ds_dict)
 
     if not settings.GROQ_API_KEY:
         logger.error("GROQ_API_KEY unset; ragas needs a judge model.")
@@ -157,12 +201,16 @@ def run_ragas(records: list[dict[str, Any]], ground_truths: list[str]) -> dict[s
         model="models/embedding-001", google_api_key=settings.GEMINI_API_KEY
     )
 
-    RETRIEVAL = {"context_precision": context_precision, "context_recall": context_recall}
-    GENERATION = {
-        "faithfulness": faithfulness,
-        "answer_relevancy": answer_relevancy,
-        "answer_similarity": answer_similarity,
-    }
+    if has_ground_truth:
+        RETRIEVAL = {"context_precision": context_precision, "context_recall": context_recall}
+        GENERATION = {
+            "faithfulness": faithfulness,
+            "answer_relevancy": answer_relevancy,
+            "answer_similarity": answer_similarity,
+        }
+    else:
+        RETRIEVAL = {}
+        GENERATION = {"faithfulness": faithfulness, "answer_relevancy": answer_relevancy}
 
     try:
         result = evaluate(
@@ -191,17 +239,34 @@ async def main() -> None:
     ap.add_argument("--top-k", type=int, default=5)
     ap.add_argument("--retrieval-only", action="store_true",
                     help="Skip LLM-judged metrics (no judge quota needed).")
+    ap.add_argument(
+        "--dataset", choices=["meddata", "benchmark"], default="benchmark",
+        help="benchmark: domain-matched clinical queries that actually retrieve context "
+             "(default -- see module docstring). meddata: broad QA corpus with real "
+             "reference answers, mostly out-of-domain for the indexed guidelines; useful "
+             "as a hallucination/refusal check, not a generation-quality measurement.",
+    )
+    ap.add_argument(
+        "--output", type=Path, default=None,
+        help="Override output path (default: careflow/artifacts/evaluation_results.json for "
+             "benchmark -- the file GET /api/v1/evaluation serves -- or "
+             "evaluation_results_meddata.json for the meddata stress test).",
+    )
     args = ap.parse_args()
 
-    df = load_dataset(args.sample_size)
+    has_ground_truth = args.dataset == "meddata"
+    df = load_dataset(args.sample_size) if has_ground_truth else load_benchmark_dataset()
     questions = df["Question"].astype(str).tolist()
     ground_truths = df["Answer"].astype(str).tolist()
 
-    logger.info("Running RAG over %d questions (top_k=%d)...", len(questions), args.top_k)
+    logger.info("Running RAG over %d questions (top_k=%d, dataset=%s)...",
+                len(questions), args.top_k, args.dataset)
     records = await collect_predictions(questions, args.top_k)
 
     diagnostics = retrieval_diagnostics(records)
-    ragas_scores = {} if args.retrieval_only else run_ragas(records, ground_truths)
+    ragas_scores = (
+        {} if args.retrieval_only else run_ragas(records, ground_truths, has_ground_truth)
+    )
 
     averages: dict[str, float] = {**ragas_scores.get("retrieval", {}), **ragas_scores.get("generation", {})}
     if diagnostics.get("mean_latency_sec") is not None:
@@ -235,12 +300,19 @@ async def main() -> None:
             "generator": settings.GEMINI_MODEL,
             "judge": settings.GROQ_MODEL if ragas_scores else None,
             "retrieval_only": args.retrieval_only,
+            "dataset": args.dataset,
         },
     }
 
-    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT_PATH.write_text(json.dumps(output, indent=2, ensure_ascii=False), encoding="utf-8")
-    logger.info("Wrote %s", OUTPUT_PATH)
+    if args.output is not None:
+        output_path = args.output
+    elif args.dataset == "meddata":
+        output_path = OUTPUT_PATH.with_name("evaluation_results_meddata.json")
+    else:
+        output_path = OUTPUT_PATH
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(output, indent=2, ensure_ascii=False), encoding="utf-8")
+    logger.info("Wrote %s", output_path)
     logger.info("Retrieval diagnostics: %s", diagnostics)
     logger.info("Averages: %s", averages)
 
