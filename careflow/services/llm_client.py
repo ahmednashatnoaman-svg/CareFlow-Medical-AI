@@ -1,7 +1,9 @@
 """Unified Multi-Provider LLM Client.
 
-Supports Google Gemini (via google-genai), Groq (via groq), and OpenAI
-with structured JSON extraction, automated fallbacks, and translation layers.
+Supports Google Gemini (via google-genai) and Groq (via groq), with structured JSON
+extraction, automated fallbacks, and translation layers. No OpenAI dependency -- Groq
+serves the same OSS model (openai/gpt-oss-120b) over an OpenAI-compatible endpoint, so
+there is no need for OpenAI as a distinct provider or API key here.
 """
 
 import json
@@ -26,12 +28,11 @@ def clean_json_text(text: str) -> str:
 
 
 class LLMClient:
-    """Production LLM Client supporting Gemini, Groq, and OpenAI with auto-fallback."""
+    """Production LLM Client supporting Gemini and Groq with auto-fallback."""
 
     def __init__(self):
         self.gemini_client = None
         self.groq_client = None
-        self.openai_client = None
         self._init_clients()
 
     def _init_clients(self):
@@ -52,15 +53,6 @@ class LLMClient:
                 logger.info("Initialized Groq client with model %s", settings.GROQ_MODEL)
             except Exception as e:
                 logger.warning("Failed to initialize Groq client: %s", e)
-
-        # 3. Initialize OpenAI Client (if provided)
-        if settings.OPENAI_API_KEY:
-            try:
-                from openai import OpenAI
-                self.openai_client = OpenAI(api_key=settings.OPENAI_API_KEY)
-                logger.info("Initialized OpenAI client with model %s", settings.OPENAI_MODEL)
-            except Exception as e:
-                logger.warning("Failed to initialize OpenAI client: %s", e)
 
     def generate_text(
         self,
@@ -121,26 +113,6 @@ class LLMClient:
                 except Exception as e:
                     logger.warning("Groq generate_text (attempt %d) failed: %s", attempt + 1, e)
                     errors.append(f"Groq: {e}")
-
-            # Attempt 3: OpenAI
-            if self.openai_client:
-                try:
-                    messages = []
-                    if system_prompt:
-                        messages.append({"role": "system", "content": system_prompt})
-                    messages.append({"role": "user", "content": prompt})
-
-                    response = self.openai_client.chat.completions.create(
-                        model=settings.OPENAI_MODEL,
-                        messages=messages,
-                        temperature=temperature,
-                        max_tokens=max_tokens,
-                    )
-                    if response.choices and response.choices[0].message.content:
-                        return response.choices[0].message.content.strip()
-                except Exception as e:
-                    logger.warning("OpenAI generate_text (attempt %d) failed: %s", attempt + 1, e)
-                    errors.append(f"OpenAI: {e}")
 
             if attempt < attempts - 1:
                 time.sleep(1.0)
