@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Python virtualenv -- ESLint has no built-in awareness of it (unlike node_modules),
+    // so without this it crawls bundled .js/.mjs assets inside torch/sklearn/coverage
+    // and reports their lint issues as if they were project code.
+    ".venv/**",
   ]),
 ]);
 
