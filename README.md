@@ -175,6 +175,19 @@ rendered in the Evaluation tab.
 > `—`, and a missing run renders the command to produce one. It never substitutes a
 > plausible-looking number.
 
+Current measured generation quality (`--dataset benchmark`, 8/8 scored):
+
+| Metric | Value |
+|---|---|
+| faithfulness | 0.653 |
+| answer relevancy | 0.803 |
+| mean latency | 8.77s |
+
+`context_precision`, `context_recall`, and `answer_similarity` are `—` (not measured) for
+this dataset by design — see above. Getting a real faithfulness number required fixing
+three bugs that only surfaced by actually running the judge end to end; see
+[Data-driven improvements](#data-driven-improvements) #5.
+
 ---
 
 ## Data-driven improvements
@@ -270,6 +283,47 @@ Replaced with a single provider chain that raises `EmbeddingUnavailableError` in
 The `mock` provider still exists for tests but is excluded from the automatic chain, so
 it can never be selected implicitly. `/health/ready` now probes the real embedder, and
 the UI surfaces its status.
+
+### 5. Three bugs were hiding the real faithfulness score, discovered only by running the judge end to end
+
+Every prior "full RAG evaluation" in this project reported `n_scored: 0, judge: null` —
+silently skipped, not measured. Actually running `evaluate_rag.py --dataset benchmark`
+surfaced three independent, real bugs, each masking the next:
+
+1. **`GROQ_MODEL` was misconfigured in `.env`** (`gpt-oss-120b`, missing Groq's required
+   `openai/` provider prefix) → every Groq call 404'd with `model_not_found`. This is the
+   model used for both the ragas judge *and* the app's own Groq fallback path, so this
+   silently defeated the dual-LLM fallback architecture, not just evaluation.
+2. **`answer_relevancy` requests `n=3`** (its default `strictness`) in one completion call
+   to generate candidate questions; Groq's OpenAI-compatible endpoint rejects any `n>1`.
+   This failed deterministically on every sample, and `RunConfig(max_retries=10)` retried
+   each failure with backoff before giving up — burning 17+ minutes to fail. Fixed by
+   constructing `AnswerRelevancy(strictness=1)`.
+3. **The judge embedder pointed at `models/embedding-001`**, which 404s on the current
+   Gemini API (`models/gemini-embedding-001` is live). Moved to a config setting
+   (`RAGAS_JUDGE_EMBEDDING_MODEL`) rather than re-hardcoding the corrected literal.
+
+With all three fixed, a fourth issue showed up in the *result*, not the run: faithfulness
+scored 0.2034 — implausibly low next to a 1.0 sanity-check on a single synthetic sample.
+The cause: `answer_question()` returns each citation's `snippet` truncated to 300 chars
+for UI display, and the evaluation harness was feeding that truncated snippet to ragas as
+the generation context — checking the answer against less evidence than the LLM actually
+saw (the prompt uses the full chunk text). Added a `full_text` field alongside `snippet`
+and pointed the harness at it instead:
+
+| | faithfulness | answer_relevancy |
+|---|---|---|
+| against truncated snippet | 0.2034 | 0.8044 |
+| **against full chunk text** | **0.6526** | 0.8031 |
+
+**3.2× on the same 8 answers, same generator, same judge** — nothing about generation
+quality changed between those two rows, only what the metric was allowed to see. Per-query
+faithfulness (0.33–0.86) now also carries real signal instead of noise: it tracks how much
+of the single retrieved chunk (§2 raised the threshold enough that most queries return
+exactly one) actually covers the question, lowest on the two asthma queries where one
+chunk doesn't fully substantiate a "well-structured, comprehensive answer." That's a
+legitimate lead for the next iteration — whether generation breadth should get its own
+floor independent of the retrieval precision threshold — not something this pass changed.
 
 ---
 
