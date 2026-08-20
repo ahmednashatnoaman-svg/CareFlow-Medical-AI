@@ -94,6 +94,14 @@ class Settings(BaseSettings):
     GROQ_MODEL: str = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
     GEMINI_API_KEY: Optional[str] = os.getenv("GEMINI_API_KEY", None)
     GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
+    # Used only by scripts/evaluate_rag.py's ragas judge (answer_similarity /
+    # answer_relevancy need a real embedder, separate from the app's own retrieval
+    # embedder in embedding_service.py). "models/embedding-001" -- the previous hardcoded
+    # value -- 404s on the current Gemini API; verify with `curl
+    # generativelanguage.googleapis.com/v1beta/models` before changing this again.
+    RAGAS_JUDGE_EMBEDDING_MODEL: str = os.getenv(
+        "RAGAS_JUDGE_EMBEDDING_MODEL", "models/gemini-embedding-001"
+    )
     OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY", None)
     OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     PRIMEKG_GRAPH_PATH: str = os.getenv("PRIMEKG_GRAPH_PATH", "data/primekg_clinical_graph.pkl")
