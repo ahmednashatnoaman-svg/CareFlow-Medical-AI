@@ -11,6 +11,7 @@ from qdrant_client import AsyncQdrantClient, QdrantClient
 from qdrant_client.http import models as qmodels
 from careflow.core.config import settings
 from careflow.core.constants import LLM_GROUNDED_ANSWER, LOG_QUERY_PREVIEW_CHARS
+from careflow.services import guardrails
 from careflow.services.embedding_service import embed_text
 from careflow.services.llm_client import llm_client
 from careflow.services.reranker_service import CrossEncoderReranker
@@ -168,6 +169,19 @@ class DialogueRAGService:
         """Performs end-to-end RAG over WHO guidelines with source attribution."""
         top_k = top_k if top_k is not None else settings.RETRIEVAL_TOP_K
 
+        # 0. Input guardrails, before any retrieval or LLM spend. An emergency description
+        # must be escalated rather than answered, and an injection attempt must never reach
+        # the grounding prompt it is trying to subvert.
+        input_verdict = guardrails.check_query(query)
+        if input_verdict.blocked:
+            return {
+                "query": query,
+                "answer": input_verdict.replacement_answer,
+                "sources": [],
+                "chunks_retrieved": 0,
+                "guardrails": input_verdict.as_dict(),
+            }
+
         # 1. Retrieve relevant chunks
         chunks = await self.search_guidelines(query=query, top_k=top_k)
 
@@ -214,9 +228,19 @@ Please provide a well-structured, clear, and comprehensive answer grounded stric
             max_tokens=LLM_GROUNDED_ANSWER.max_tokens,
         )
 
+        # 5. Output guardrails. The grounding instruction in the system prompt is a request
+        # the model can decline; these checks are enforced regardless of what it emitted.
+        output_verdict = guardrails.check_answer(answer, chunks)
+        if output_verdict.blocked:
+            answer = output_verdict.replacement_answer
+        elif output_verdict.warnings:
+            answer = f"{answer.rstrip()}\n\n> ⚠️ {' '.join(output_verdict.warnings)}"
+        answer = guardrails.enforce_disclaimer(answer)
+
         return {
             "query": query,
             "answer": answer,
+            "guardrails": output_verdict.as_dict(),
             "sources": [
                 {
                     "source_file": c["source_file"],

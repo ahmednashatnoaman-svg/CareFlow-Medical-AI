@@ -80,8 +80,23 @@ class DialogueChatRequest(BaseModel):
     )
 
 
+class GuardrailReport(BaseModel):
+    """Which safety guardrails fired on a request, surfaced rather than silently applied.
+
+    A client that sees `blocked=True` is looking at a guardrail's replacement text, not a
+    retrieved answer -- notably for an emergency escalation, where the UI should present it
+    far more prominently than an ordinary response.
+    """
+
+    blocked: bool = False
+    triggered: List[str] = []
+    warnings: List[str] = []
+    reason: str = ""
+
+
 class DialogueChatResponse(BaseModel):
     query: str
     answer: str
     sources: List[Citation] = []
     chunks_retrieved: int = 0
+    guardrails: Optional[GuardrailReport] = None

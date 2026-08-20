@@ -2,7 +2,12 @@
 
 import logging
 from fastapi import APIRouter, HTTPException, status
-from careflow.schemas.chatbot import Citation, DialogueChatRequest, DialogueChatResponse
+from careflow.schemas.chatbot import (
+    Citation,
+    DialogueChatRequest,
+    DialogueChatResponse,
+    GuardrailReport,
+)
 from careflow.services.dialogue_service import dialogue_service
 
 logger = logging.getLogger(__name__)
@@ -36,11 +41,13 @@ async def chat_with_who_guidelines(req: DialogueChatRequest) -> DialogueChatResp
             for s in result.get("sources", [])
         ]
 
+        guardrail_state = result.get("guardrails")
         return DialogueChatResponse(
             query=result["query"],
             answer=result["answer"],
             sources=citations,
             chunks_retrieved=result.get("chunks_retrieved", len(citations)),
+            guardrails=GuardrailReport(**guardrail_state) if guardrail_state else None,
         )
 
     except Exception as e:
