@@ -1,130 +1,361 @@
-# CareFlow Dual-Mode Medical AI 🏥
+# CareFlow — Dual-Mode Clinical AI
 
-[![Next.js](https://img.shields.io/badge/Next.js-16-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
-[![Qdrant](https://img.shields.io/badge/Qdrant-Cloud-FF004D?style=for-the-badge&logo=qdrant)](https://qdrant.tech/)
-[![LangGraph](https://img.shields.io/badge/LangGraph-Agents-blue?style=for-the-badge)](https://python.langchain.com/docs/langgraph)
+[![Next.js](https://img.shields.io/badge/Next.js-16-000000?style=flat-square&logo=next.js)](https://nextjs.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?style=flat-square&logo=fastapi)](https://fastapi.tiangolo.com/)
+[![Qdrant](https://img.shields.io/badge/Qdrant-Cloud-DC244C?style=flat-square&logo=qdrant)](https://qdrant.tech/)
+[![Tests](https://img.shields.io/badge/tests-37%20passing-3fb950?style=flat-square)](#testing)
 
-**CareFlow** is an advanced, dual-mode Medical AI system built for the Creativa AI Hackathon. It goes far beyond a standard Retrieval-Augmented Generation (RAG) implementation by integrating **Agentic Workflows (LangGraph)**, **Dual-LLM Routing**, and **Quantitative Ragas Evaluation Metrics**.
+Two retrieval modes over one clinical backend:
 
----
-
-## 🏆 Project Evaluation Checklist Achievement
-
-We have explicitly designed CareFlow to achieve 100% compliance with the hackathon's grading criteria:
-
-### 1. Comprehensive System Architecture
-CareFlow is not a standalone RAG model. It is a full-stack, end-to-end architecture featuring:
-- **Frontend**: A highly polished, responsive Next.js 16 UI using Tailwind CSS, Framer Motion, and Shadcn UI.
-- **Backend**: A high-performance FastAPI server.
-- **Agentic Engine**: LangGraph state machines that dynamically route queries between a Knowledge Graph Triage engine and a Qdrant-backed Vector RAG engine based on clinical intent.
-
-### 2. Custom User Interface (Pro Max Level)
-We entirely bypassed basic Streamlit templates. Instead, we built a **dedicated, custom Next.js web application** that looks and feels like a YC-backed startup product. It includes rich typography (Geist fonts), smooth micro-animations, and a highly intuitive chat interface.
-
-### 3. Quantitative Evaluation Metrics
-We integrated `ragas` into a dedicated evaluation pipeline (`scripts/evaluate_rag.py`). We **separately measure and validate**:
-- **Retrieval Metrics**: Context Precision, Context Recall, Answer Similarity.
-- **Generation Metrics**: Faithfulness, Answer Relevancy.
-Results are saved to `app/static/evaluation_results.json` for full transparency.
-
-### 4. Data-Driven Improvements (Bottleneck Analysis)
-During development, our evaluation metrics revealed critical bottlenecks:
-- *Insight (Latency/Rate Limits)*: Initial generation calls to OpenAI/Gemini hit severe rate limits, causing latency spikes >10s.
-- *Action*: We implemented a **Dual-LLM Fallback Architecture** using Groq's high-speed API (`gpt-oss-120b`) for ultra-fast generation, falling back to Gemini only for complex reasoning tasks. This dropped latency by 85%.
-- *Insight (Bundle Size)*: Vercel serverless function limits (250MB) were exceeded due to heavy ML dependencies (`torch`, `transformers`).
-- *Action*: We decoupled heavy local embedding models in favor of streamlined cloud APIs (Google Generative AI Embeddings) and refactored our deployment pipeline, entirely resolving the Vercel limits.
-
-### 5. Out-of-the-Box Thinking
-- **Socrates Scoring Engine**: We implemented a dynamic questioning system for patient triaging. The agent asks adaptive questions and uses an entropy-based stopping condition to determine when enough information has been gathered to make a clinical recommendation.
-- **Multi-Modal Readiness**: The architecture supports both structured graph data (PrimeKG) and unstructured WHO textual guidelines simultaneously.
-
-### 6. Attention to Detail
-- **Seamless Local Execution**: Run the entire stack (Frontend + Backend) concurrently with a single `npm run dev:all` command.
-- **Robust Error Handling**: If an LLM endpoint fails, the LangGraph agent gracefully routes to a fallback model.
+- **Mode 1 — Diagnostic triage (Graph RAG).** A multi-turn interview that traverses a
+  clinical knowledge graph, tracks the eight SOCRATES axes of a pain history, and stops
+  on an entropy/coverage policy rather than a fixed question count.
+- **Mode 2 — Guideline retrieval (Vector RAG).** Grounded answers over indexed clinical
+  guidelines in Qdrant, with the retrieved passages attached to every response.
 
 ---
 
-## 🏗 System Architecture Diagram
+## Architecture
 
 ```mermaid
-graph TD
-    %% Define styles
-    classDef frontend fill:#000,stroke:#fff,stroke-width:2px,color:#fff;
-    classDef backend fill:#009688,stroke:#fff,stroke-width:2px,color:#fff;
-    classDef agent fill:#1565c0,stroke:#fff,stroke-width:2px,color:#fff;
-    classDef db fill:#ff004d,stroke:#fff,stroke-width:2px,color:#fff;
-    classDef external fill:#f57c00,stroke:#fff,stroke-width:2px,color:#fff;
+flowchart TB
+    subgraph client["Browser"]
+        UI["Next.js 16 console<br/>triage · guidelines · evaluation"]
+    end
 
-    %% Components
-    User((User Patient))
-    UI["Next.js UI\n(Tailwind + Framer Motion)"]:::frontend
-    API["FastAPI Backend\n(REST API)"]:::backend
-    LangGraph{"LangGraph Router\n(Intent Detection)"}:::agent
-    
-    Qdrant[("Qdrant Cloud\nVector DB\n(WHO Guidelines)")]:::db
-    PrimeKG[("PrimeKG\nKnowledge Graph")]:::db
-    
-    Gemini["Google Gemini\n(Embeddings & Reasoning)"]:::external
-    Groq["Groq LPU\n(Ultra-fast Generation)"]:::external
+    subgraph api["FastAPI — careflow/"]
+        R["/api/v1 router"]
+        T["triage_service<br/>SOCRATES + entropy stop"]
+        D["dialogue_service<br/>grounded generation"]
+        E["embedding_service<br/>single provider chain"]
+        S["session_store<br/>memory | redis"]
+    end
 
-    %% Flow
-    User <-->|Chat Interface| UI
-    UI <-->|HTTP POST /api/chat| API
-    API --> LangGraph
-    
-    LangGraph -->|Clinical Triage| PrimeKG
-    LangGraph -->|Medical Protocol| Qdrant
-    
-    Qdrant <-->|Similarity Search| Gemini
-    PrimeKG <-->|Adaptive Questioning| Groq
-    
-    Gemini -->|Generated Answer| API
-    Groq -->|Generated Answer| API
+    subgraph ext["External"]
+        KG[("PrimeKG<br/>clinical graph")]
+        QD[("Qdrant<br/>who_guidelines")]
+        EM["Modal BGE-M3<br/>embedder"]
+        LLM["Gemini / Groq / OpenAI<br/>with fallback"]
+    end
+
+    UI -->|"POST /triage/step"| R
+    UI -->|"POST /dialogue/chat"| R
+    UI -->|"GET /health/ready"| R
+
+    R --> T
+    R --> D
+    T <--> S
+    T --> KG
+    T --> LLM
+    D --> E
+    E --> EM
+    D --> QD
+    D --> LLM
+
+    classDef c fill:#0d1117,stroke:#00e5a0,color:#e6edf3
+    classDef a fill:#0d1117,stroke:#58a6ff,color:#e6edf3
+    classDef x fill:#0d1117,stroke:#d29922,color:#e6edf3
+    class UI c
+    class R,T,D,E,S a
+    class KG,QD,EM,LLM x
+```
+
+### Triage interview loop
+
+```mermaid
+sequenceDiagram
+    participant P as Patient
+    participant UI as Console
+    participant API as FastAPI
+    participant KG as PrimeKG
+    participant L as LLM
+
+    P->>UI: describes symptom
+    UI->>API: POST /triage/step {session_id, message}
+    API->>API: load session from store
+    API->>L: extract positive / negated symptoms
+    API->>KG: rank candidate diseases, next informative symptom
+    API->>API: update SOCRATES axes, compute entropy
+    alt stopping policy satisfied
+        API->>L: synthesize differential diagnosis
+        API-->>UI: report + urgency level
+    else continue
+        API->>L: formulate next question + 3 options
+        API-->>UI: question, options, live telemetry
+    end
+    API->>API: persist session
 ```
 
 ---
 
-## 🚀 Getting Started (Local Deployment)
+## Quick start
 
-To run the entire system locally without Vercel limits, we have configured a unified startup script.
-
-### 1. Clone & Install
 ```bash
-git clone https://github.com/careflow-eg/creativa-hackathon-RAG.git
-cd creativa-hackathon-RAG
+# 1. Python environment
+uv venv && uv pip install -e ".[dev,eval]"
 
-# 1. Install Node.js dependencies (Frontend)
+# 2. Secrets — at minimum QDRANT_URL, QDRANT_API_KEY, and one LLM key
+cp .env.example .env && $EDITOR .env
+
+# 3. Node dependencies
 npm install
 
-# 2. Install Python dependencies (Backend & RAG)
-# (Ensure you have Python 3.11+ installed)
-uv pip install -r requirements.txt
-# OR
-pip install -r requirements.txt
-```
-
-### 2. Environment Variables
-Copy the example environment file and fill in your API keys (Qdrant, Groq, Gemini):
-```bash
-cp .env.example .env
-```
-*(All necessary secrets for GitHub Actions / Vercel are documented in this `.env.example` file)*
-
-### 3. Run Concurrently
-Start both the Next.js frontend (Port 3000) and FastAPI backend (Port 8000) with one command:
-```bash
+# 4. Run frontend (3000) + backend (8000) together
 npm run dev:all
 ```
-Visit `http://localhost:3000` to interact with CareFlow!
+
+Open <http://localhost:3000>. The status pill in the header reports whether Qdrant, the
+embedder, and the knowledge graph are actually reachable.
+
+Run the pieces separately if you prefer:
+
+```bash
+npm run dev:api   # FastAPI  — http://127.0.0.1:8000/docs
+npm run dev       # Next.js  — http://localhost:3000
+```
 
 ---
 
-## 📊 Evaluation 
+## Evaluation
 
-To run the Quantitative Evaluation Metrics script (Testing Faithfulness, Context Precision, etc.):
+Retrieval and generation are measured **separately**, because they fail for different
+reasons and a blended score hides which stage is at fault.
+
+### Retrieval benchmark (no API quota required)
+
 ```bash
-# Ensure you have installed the [eval] dependencies in pyproject.toml
-python scripts/evaluate_rag.py
+python scripts/benchmark_retrieval.py --top-k 5
 ```
-This generates a detailed JSON report proving the efficacy of both our Retrieval and Generation modules.
+
+Scores 8 labeled in-domain clinical queries from
+`data/benchmarks/retrieval_benchmark.json`, each annotated with the guideline that must
+be retrieved and the keywords the answer requires, run through the exact production path
+(`RETRIEVAL_SCORE_THRESHOLD` filter, then cross-encoder rerank). No LLM is involved, so
+this runs free and fast as a regression check.
+
+| Metric | Value |
+|---|---|
+| top-1 accuracy | 1.000 |
+| MRR | 1.000 |
+| precision@5 | 1.000 |
+| keyword recall | 1.000 |
+| hit rate | 1.000 |
+
+Every retrieval metric this benchmark can express is at ceiling. `--sweep` and
+`--no-rerank` reproduce how each stage (score threshold, cross-encoder) contributes to
+that — see [Data-driven improvements](#data-driven-improvements) below.
+
+### Full RAG evaluation (ragas — needs a judge model)
+
+```bash
+python scripts/evaluate_rag.py --top-k 5                       # domain-matched (default)
+python scripts/evaluate_rag.py --dataset meddata --sample-size 10  # broad QA, refusal check
+python scripts/evaluate_rag.py --retrieval-only                # skip LLM-judged metrics entirely
+```
+
+Two question sources, because one dataset can't honestly serve both jobs:
+
+- `benchmark` (default) reuses the retrieval benchmark's 8 clinical queries, which do
+  retrieve real context, so `faithfulness` and `answer_relevancy` measure something
+  meaningful. It has no curated reference answer (only `expected_keywords`), so
+  `context_recall` and `answer_similarity` are intentionally left unmeasured rather than
+  approximated.
+- `meddata` has real reference answers, so it's the only source that can score
+  `context_recall` and `answer_similarity`. Most of its questions fall outside the
+  indexed WHO/CDC/USPSTF guidelines, so at a well-tuned score threshold it mostly
+  retrieves nothing — it verifies the system says "insufficient information" instead of
+  guessing, which is a real and useful check, but not an in-domain generation-quality
+  measurement, so it writes to its own file rather than the headline one.
+
+Writes `careflow/artifacts/evaluation_results.json` (benchmark) or
+`evaluation_results_meddata.json` (meddata). `GET /api/v1/evaluation` serves the former,
+rendered in the Evaluation tab.
+
+> The dashboard has **no fallback values**. A metric that was not measured renders as
+> `—`, and a missing run renders the command to produce one. It never substitutes a
+> plausible-looking number.
+
+---
+
+## Data-driven improvements
+
+Each of these came from a measurement, not a guess.
+
+### 1. The knowledge base contained no clinical guidelines
+
+Inspecting the live collection showed all 700 indexed chunks were WHO *administrative*
+documents — Immunization Technical Advisory Group minutes, Polio Certification
+Commission minutes, Global Action Plan progress reports, epidemiological bulletins.
+Not one treatment guideline.
+
+Root cause: `ingest_document()` chunked text, built payload metadata, logged
+`"Document ingested successfully"`, and returned — with no embedding call and no upsert.
+It never wrote anything, so every ingestion reported success while persisting nothing.
+
+After repairing the pipeline and ingesting real guidelines (top-1 cosine):
+
+| Query | Before | After | Δ |
+|---|---|---|---|
+| blood pressure threshold | 0.4481 | 0.6593 | **+0.2112** |
+| first-line antihypertensives | 0.4524 | 0.6904 | **+0.2380** |
+| diabetes diagnostic criteria | 0.4736 | 0.6583 | **+0.1847** |
+| asthma maintenance therapy | 0.4563 | 0.6465 | **+0.1902** |
+
+Correct top-1 source went **0/4 → 4/4**. End to end, *"What blood pressure threshold
+defines hypertension?"* moved from *"The provided WHO guidelines do not contain
+sufficient information"* to a grounded answer citing WHO Guideline – Hypertension 2021
+at 0.7235.
+
+### 2. 80% of retrieved context was noise
+
+The benchmark showed precision@5 = 0.200 while top-1 accuracy and MRR were both 1.000:
+retrieval found the right document every time, but four of five chunks passed to the
+generator were irrelevant. Sweeping `RETRIEVAL_SCORE_THRESHOLD` over the labeled set
+(`python scripts/benchmark_retrieval.py --sweep 0.20,0.35,0.45,0.50,0.55,0.60,0.65`,
+bi-encoder score only, so this isolates the threshold from the reranker in #4 below):
+
+| Threshold | precision@5 | chunks/query | keyword recall |
+|---|---|---|---|
+| 0.20 | 0.200 | 5.00 | 8/8 |
+| 0.35 | 0.200 | 5.00 | 8/8 |
+| 0.45 | 0.375 | 3.75 | 8/8 |
+| 0.50 | 0.692 | 2.00 | 8/8 |
+| **0.55** | **1.000** | **1.00** | **8/8** |
+| 0.60 | 1.000 | 1.00 | 8/8 |
+| 0.65 | 0.625 | 0.62 | 5/8 |
+
+Keyword recall holds at 8/8 through 0.60 — nothing clinically needed is lost getting to
+perfect precision. Past 0.65 real answer content starts getting cut, not just noise
+(keyword recall drops to 5/8, top-1 accuracy to 0.625). Default raised 0.20 → **0.55**:
+precision@5 **0.200 → 1.000**, top-1 accuracy and MRR unchanged at 1.000. 0.55 is chosen
+over the equally-scoring 0.60 for the larger margin to that 0.65 cliff — the sweep covers
+8 queries against 3 clinical documents, so a threshold with no safety margin is a
+regression waiting to happen on a slightly different query.
+
+### 3. The two RAG modes picked their final context differently — and the fix taught us the threshold, not the reranker, was doing the precision work
+
+The triage graph (`retrieval_service.py`) already retrieved a wide candidate pool and
+reranked it with a cross-encoder (`BAAI/bge-reranker-v2-m3`) before generation. The
+guideline Q&A path (`dialogue_service.search_guidelines`, used by the benchmark above and
+the Guidelines console) never did — it queried Qdrant once and returned raw vector order.
+Wired the same reranker in, with an ablation to check what it actually bought:
+
+| Configuration | precision@5 | top-1 accuracy | MRR |
+|---|---|---|---|
+| threshold 0.50, no rerank | 0.692 | 1.000 | 1.000 |
+| threshold 0.50, **with rerank** | 0.692 | 1.000 | 1.000 |
+| threshold 0.55, no rerank | 1.000 | 1.000 | 1.000 |
+| threshold 0.55, **with rerank** | 1.000 | 1.000 | 1.000 |
+
+No measurable change on this benchmark — reproducible with
+`python scripts/benchmark_retrieval.py --no-rerank` vs. the default. The reason is
+structural, not a bug: at threshold ≥ 0.50 only 1-2 candidates survive the vector filter
+per query, and reranking one or two items can't change which document they came from.
+The reranker earns its keep on a wider, noisier candidate pool (low threshold, many
+source documents) — which this 3-document benchmark doesn't exercise, but the full
+700-chunk collection (nine WHO administrative sources plus the three clinical guidelines)
+does. It's kept as the default for architectural consistency between both RAG modes and
+as a second precision stage should the threshold alone stop being sufficient as the
+corpus grows; the honest finding here is that the threshold sweep in #2, not the
+reranker, is what earned the current perfect score.
+
+### 4. Retrieval could fail silently
+
+Both embedding paths ended in a deterministic pseudo-random vector when no provider was
+reachable. A random query vector searched against a real BGE-M3 index returns arbitrary
+chunks with plausible similarity scores, which the LLM then answers over confidently —
+no exception, no empty result, just silently wrong medical retrieval.
+
+Replaced with a single provider chain that raises `EmbeddingUnavailableError` instead.
+The `mock` provider still exists for tests but is excluded from the automatic chain, so
+it can never be selected implicitly. `/health/ready` now probes the real embedder, and
+the UI surfaces its status.
+
+---
+
+## Project layout
+
+```
+careflow/              FastAPI backend (single canonical package)
+  api/v1/endpoints/    route handlers
+  core/                config, constants, logging, version
+  services/            embedding, retrieval, dialogue, triage, session store
+  artifacts/           evaluation + benchmark output
+src/                   Next.js frontend (App Router)
+  app/                 layout, page, design tokens
+  components/console/  triage, guidelines, telemetry, evaluation
+  lib/api.ts           typed client mirroring the backend schemas
+api/index.py           Vercel serverless entrypoint
+scripts/               ingestion, evaluation, benchmark, CLI tools
+data/benchmarks/       labeled retrieval benchmark
+tests/                 unit (default) + integration (opt-in)
+```
+
+Three directories in this repo could reasonably be called "app": `src/app/` is required
+by the Next.js App Router, `api/` is required by Vercel's Python builder, and the FastAPI
+package is the only one free to be named — hence `careflow/`.
+
+---
+
+## Testing
+
+```bash
+pytest                    # 37 unit tests, ~14s, no network
+pytest -m integration     # live Qdrant + LLM APIs, real keys, consumes quota
+npx tsc --noEmit          # frontend types
+npx eslint src            # frontend lint
+```
+
+Integration tests are deselected by default: they require live services and exhaust the
+Gemini free tier (15 requests/minute).
+
+---
+
+## Configuration
+
+Every setting has a working default in `careflow/core/config.py` and is overridable by
+environment variable. See `.env.example` for the annotated list. The ones that matter
+most:
+
+| Variable | Default | Why it matters |
+|---|---|---|
+| `EMBEDDING_PROVIDER` | `auto` | `auto` → hosted, then local. Pin to `remote` on any host without room for a ~2.3GB local model download (serverless, disk-constrained dev boxes) — `local` is a same-process fallback, not a bound, so `auto`'s worst case is still that download. `mock` is tests-only and never auto-selected. |
+| `RETRIEVAL_SCORE_THRESHOLD` | `0.55` | Tuned from the benchmark; see above. |
+| `SESSION_BACKEND` | `auto` | **Must be `redis` on serverless** — see below. |
+| `ALLOWED_ORIGINS` | `*` | A wildcard disables credentialed CORS, per the Fetch spec. |
+
+---
+
+## Deployment
+
+### Vercel
+
+```bash
+vercel link
+vercel env add QDRANT_URL production      # repeat per secret
+vercel --prod
+```
+
+`vercel.json` routes `/api/*` to `api/index.py`; the Next.js rewrite is skipped when
+`VERCEL` is set, so it only proxies to localhost during development.
+
+**Set `SESSION_BACKEND=redis` with a reachable `REDIS_URL` before deploying.** Serverless
+invocations are not guaranteed to reuse a process, so in-memory sessions make `/triage/step`
+start a fresh interview on every turn — the patient's answers silently vanish.
+
+The heavy ML stack (`torch`, `sentence-transformers`) is deliberately excluded from
+`requirements.txt` because it exceeds Vercel's 250MB function limit. Production embeds
+through `EMBEDDER_ENDPOINT_URL`; install `.[local-embeddings]` to run fully offline.
+
+### Container (Railway, Fly, any Docker host)
+
+```bash
+docker build -t careflow . && docker run -p 8000:8000 --env-file .env careflow
+```
+
+---
+
+## Safety
+
+Clinical decision support for demonstration purposes. Not a medical device, not a
+diagnosis, and not a substitute for assessment by a qualified clinician.
