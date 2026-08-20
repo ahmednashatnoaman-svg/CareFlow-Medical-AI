@@ -13,8 +13,16 @@ from careflow.core.config import settings
 from careflow.core.constants import LLM_GROUNDED_ANSWER, LOG_QUERY_PREVIEW_CHARS
 from careflow.services.embedding_service import embed_text
 from careflow.services.llm_client import llm_client
+from careflow.services.reranker_service import CrossEncoderReranker
 
 logger = logging.getLogger(__name__)
+
+# Shared across DialogueRAGService instances for the same reason retrieval_service's
+# graph pipeline caches its reranker: CrossEncoder weight loading is expensive, and this
+# is the second call site for the same model (BAAI/bge-reranker-v2-m3), so it must reuse
+# the reranker_service module-level cache rather than trigger a second download.
+_reranker = CrossEncoderReranker()
+
 
 class DialogueRAGService:
     """Vector RAG Assistant grounded in WHO medical guidelines."""
@@ -49,19 +57,35 @@ class DialogueRAGService:
         query: str,
         top_k: int | None = None,
         score_threshold: float | None = None,
+        rerank: bool = True,
     ) -> List[Dict[str, Any]]:
         """Searches who_guidelines collection in Qdrant for semantic matches.
 
         `top_k` and `score_threshold` default to the configured values rather than to
         literals baked into the signature, so retrieval breadth is tunable per
         deployment without a code change.
+
+        Retrieves `RETRIEVAL_CANDIDATE_K` candidates above `score_threshold`, then reranks
+        with a cross-encoder (BAAI/bge-reranker-v2-m3) down to `top_k`. Vector similarity
+        (bi-encoder) optimizes for recall over the whole collection, not precision on this
+        one query -- it embeds query and chunk independently and never lets them attend to
+        each other. The cross-encoder scores each (query, chunk) pair jointly, so it is a
+        strictly better precision signal for choosing what actually reaches the generator.
+        This was previously computed for the triage graph's chunk search
+        (retrieval_service.py) but not for this guideline Q&A path, so the two RAG modes
+        picked their final context differently. `rerank=False` is kept for the retrieval
+        benchmark, which needs raw vector order to measure the bi-encoder in isolation.
         """
         top_k = top_k if top_k is not None else settings.RETRIEVAL_TOP_K
         score_threshold = (
             score_threshold if score_threshold is not None else settings.RETRIEVAL_SCORE_THRESHOLD
         )
-        logger.info("Executing WHO guidelines vector search for query: '%s' (top_k=%d)", query[:80], top_k)
-        
+        candidate_k = max(settings.RETRIEVAL_CANDIDATE_K, top_k) if rerank else top_k
+        logger.info(
+            "Executing WHO guidelines vector search for query: '%s' (candidate_k=%d, top_k=%d, rerank=%s)",
+            query[:80], candidate_k, top_k, rerank,
+        )
+
         # Embed query text
         query_vector = await asyncio.to_thread(embed_text, query, settings.VECTOR_SIZE)
 
@@ -75,7 +99,7 @@ class DialogueRAGService:
                     collection_name=self.collection_name,
                     query=query_vector,
                     using="dense",
-                    limit=top_k,
+                    limit=candidate_k,
                     score_threshold=score_threshold,
                 )
                 hits = res.points if hasattr(res, "points") else res
@@ -83,7 +107,7 @@ class DialogueRAGService:
                 hits = await client.search(
                     collection_name=self.collection_name,
                     query_vector=("dense", query_vector),
-                    limit=top_k,
+                    limit=candidate_k,
                     score_threshold=score_threshold,
                 )
         except Exception as e:
@@ -93,7 +117,7 @@ class DialogueRAGService:
                     res = await client.query_points(
                         collection_name=self.collection_name,
                         query=query_vector,
-                        limit=top_k,
+                        limit=candidate_k,
                         score_threshold=score_threshold,
                     )
                     hits = res.points if hasattr(res, "points") else res
@@ -119,7 +143,20 @@ class DialogueRAGService:
                 "position": position,
             })
 
-        logger.info("Retrieved %d relevant chunks from '%s'", len(chunks), self.collection_name)
+        logger.info("Retrieved %d candidate chunks from '%s'", len(chunks), self.collection_name)
+
+        if rerank and len(chunks) > top_k:
+            # CrossEncoderReranker reads chunk text from the "content" key (a convention
+            # shared with retrieval_service's chunk shape); this service's chunks carry
+            # "text" instead, so bridge the two without changing either service's schema.
+            for c in chunks:
+                c["content"] = c["text"]
+            chunks = await _reranker.rerank(query, chunks, top_n=top_k)
+            for c in chunks:
+                c.pop("content", None)
+        else:
+            chunks = chunks[:top_k]
+
         return chunks
 
     async def answer_question(
