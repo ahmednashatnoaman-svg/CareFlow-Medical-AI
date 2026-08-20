@@ -161,6 +161,29 @@ class Settings(BaseSettings):
     # Citation snippet length shown in the UI.
     CITATION_SNIPPET_CHARS: int = int(os.getenv("CITATION_SNIPPET_CHARS", "300"))
 
+    # RAG safety guardrails (careflow/services/guardrails.py). Each runs outside the model,
+    # so it holds even when the model ignores its grounding instructions. All default ON --
+    # these are safety controls on medical output, not optional enrichment. GUARDRAILS_ENABLED
+    # is a single master switch, kept so the guardrail layer can be isolated during
+    # evaluation runs that need to measure raw model behaviour.
+    GUARDRAILS_ENABLED: bool = os.getenv("GUARDRAILS_ENABLED", "True").lower() in ("true", "1", "t")
+    # Escalate suspected emergencies to emergency services instead of answering.
+    GUARDRAIL_EMERGENCY_ESCALATION: bool = os.getenv(
+        "GUARDRAIL_EMERGENCY_ESCALATION", "True"
+    ).lower() in ("true", "1", "t")
+    # Refuse queries that try to override the grounding instruction or exfiltrate the prompt.
+    GUARDRAIL_BLOCK_INJECTION: bool = os.getenv(
+        "GUARDRAIL_BLOCK_INJECTION", "True"
+    ).lower() in ("true", "1", "t")
+    # Replace any answer produced with zero retrieved context with the refusal message.
+    GUARDRAIL_BLOCK_UNGROUNDED: bool = os.getenv(
+        "GUARDRAIL_BLOCK_UNGROUNDED", "True"
+    ).lower() in ("true", "1", "t")
+    # Flag doses/thresholds asserted in an answer that appear in no retrieved passage.
+    GUARDRAIL_NUMERIC_CHECK: bool = os.getenv(
+        "GUARDRAIL_NUMERIC_CHECK", "True"
+    ).lower() in ("true", "1", "t")
+
     # Interview Termination Engine Parameters
     MIN_QUESTIONS: int = int(os.getenv("MIN_QUESTIONS", "3"))
     MAX_QUESTIONS: int = int(os.getenv("MAX_QUESTIONS", "8"))
