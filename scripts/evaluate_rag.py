@@ -114,7 +114,14 @@ async def collect_predictions(questions: list[str], top_k: int) -> list[dict[str
                 "answer": res["answer"],
                 # Each record owns its own list. The previous version initialised
                 # `contexts = [[]] * n`, which aliases one list across every row.
-                "contexts": [s["snippet"] for s in res["sources"]],
+                #
+                # full_text, not snippet: snippet is the 300-char UI citation, but the
+                # generator was prompted with the full chunk text. Scoring faithfulness
+                # against the truncated snippet checks the answer against less evidence
+                # than actually produced it, which manufactures unfaithfulness that has
+                # nothing to do with generation quality. `.get` falls back to snippet for
+                # any cached/mocked source dict from before full_text existed.
+                "contexts": [s.get("full_text", s["snippet"]) for s in res["sources"]],
                 "scores": [s["relevance_score"] for s in res["sources"]],
                 "latency_sec": round(time.perf_counter() - started, 3),
                 "error": None,
