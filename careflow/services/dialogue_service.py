@@ -223,6 +223,12 @@ Please provide a well-structured, clear, and comprehensive answer grounded stric
                     "section": c["section"],
                     "relevance_score": c["score"],
                     "snippet": c["text"][:300] + ("..." if len(c["text"]) > 300 else ""),
+                    # Full, untruncated chunk text -- the generator saw this, not the
+                    # 300-char UI snippet above. Evaluation harnesses that check
+                    # faithfulness against "snippet" are checking the answer against less
+                    # context than actually produced it, which understates faithfulness
+                    # for reasons that have nothing to do with generation quality.
+                    "full_text": c["text"],
                 }
                 for c in chunks
             ],
