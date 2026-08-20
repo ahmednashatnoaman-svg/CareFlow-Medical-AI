@@ -102,8 +102,6 @@ class Settings(BaseSettings):
     RAGAS_JUDGE_EMBEDDING_MODEL: str = os.getenv(
         "RAGAS_JUDGE_EMBEDDING_MODEL", "models/gemini-embedding-001"
     )
-    OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY", None)
-    OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     PRIMEKG_GRAPH_PATH: str = os.getenv("PRIMEKG_GRAPH_PATH", "data/primekg_clinical_graph.pkl")
     GROQ_BASE_URL: str = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
     ASR_ENDPOINT_URL: str = os.getenv(
