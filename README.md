@@ -380,6 +380,11 @@ most:
 | `RETRIEVAL_SCORE_THRESHOLD` | `0.55` | Tuned from the benchmark; see above. |
 | `SESSION_BACKEND` | `auto` | **Must be `redis` on serverless** — see below. |
 | `ALLOWED_ORIGINS` | `*` | A wildcard disables credentialed CORS, per the Fetch spec. |
+| `GUARDRAILS_ENABLED` | `True` | Master switch for [Guardrails](#guardrails). Off only to measure raw model behaviour. |
+| `GUARDRAIL_EMERGENCY_ESCALATION` | `True` | Escalate suspected emergencies instead of answering. |
+| `GUARDRAIL_BLOCK_INJECTION` | `True` | Refuse queries attacking the grounding instruction. |
+| `GUARDRAIL_BLOCK_UNGROUNDED` | `True` | Replace answers generated with no retrieved context. |
+| `GUARDRAIL_NUMERIC_CHECK` | `True` | Flag doses/thresholds absent from every retrieved passage. |
 
 ---
 
@@ -416,3 +421,45 @@ docker build -t careflow . && docker run -p 8000:8000 --env-file .env careflow
 
 Clinical decision support for demonstration purposes. Not a medical device, not a
 diagnosis, and not a substitute for assessment by a qualified clinician.
+
+### Guardrails
+
+`careflow/services/guardrails.py` enforces safety **outside** the model. The grounding
+instruction in the system prompt ("answer only from the retrieved context") is a request
+the model can decline — these checks hold regardless of what it emits, which is exactly
+when they matter. All are deterministic and LLM-free: a guardrail that needs its own model
+call fails precisely when the model is already failing, and taxes every request.
+
+| Stage | Guardrail | Behaviour |
+|---|---|---|
+| Input | Emergency escalation | Returns emergency-services guidance instead of a guideline lookup. Fires **before** retrieval, so it costs no embedding/Qdrant/LLM call. |
+| Input | Prompt injection | Refuses attempts to override grounding, reassign the model's role, or exfiltrate the system prompt. |
+| Output | Ungrounded answer | An answer generated from **zero** retrieved chunks is replaced with the refusal message. |
+| Output | Clinical numeric check | Doses/thresholds asserted in the answer but present in no retrieved passage are flagged to the user. |
+| Output | Disclaimer | Appended if the model dropped it. |
+
+Emergency detection requires **both** a first-person distress signal **and** a red-flag
+symptom. This matters more than it sounds: a guidelines assistant is *expected* to be asked
+*"What does WHO recommend for chest pain evaluation?"*, and a symptom-keyword-only rule
+would escalate every such query — training users to ignore the one warning that must never
+be ignored. Self-harm patterns deliberately bypass the distress requirement, because the
+cost of a false negative there is not symmetric with the cost of a false alarm.
+
+The numeric check compares on the numeric token, not the formatted string, so a passage
+reading *"130 mmHg or higher"* supports an answer saying *"≥130 mmHg"*; it reads the full
+chunk text rather than the truncated UI citation snippet; and it ignores bare numbers so
+list markers and years are never mistaken for clinical claims. It **warns rather than
+blocks** — one unverified figure shouldn't discard an otherwise sound answer.
+
+Verified against the live pipeline: **0 false positives across all 8 benchmark queries**,
+0 spurious numeric warnings on the three number-heavy ones, and retrieval metrics unchanged
+at 1.000. Covered by 33 unit tests (`tests/unit/test_guardrails.py`), weighted toward the
+false-positive cases.
+
+Every guardrail is individually switchable (`GUARDRAIL_*` in [Configuration](#configuration)),
+with `GUARDRAILS_ENABLED` as a master switch so the evaluation harness can measure raw
+model behaviour without this layer masking it. All default **on**.
+
+The response carries a `guardrails` object reporting what fired, so a client can tell
+guardrail replacement text from a retrieved answer — an emergency escalation should be
+presented far more prominently than an ordinary response.
