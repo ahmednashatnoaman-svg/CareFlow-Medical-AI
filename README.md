@@ -5,6 +5,9 @@
 [![Qdrant](https://img.shields.io/badge/Qdrant-Cloud-DC244C?style=flat-square&logo=qdrant)](https://qdrant.tech/)
 [![Tests](https://img.shields.io/badge/tests-37%20passing-3fb950?style=flat-square)](#testing)
 
+**Live:** <https://careflow-medical-ai.vercel.app> · API health:
+[`/api/v1/health/ready`](https://careflow-medical-ai.vercel.app/api/v1/health/ready)
+
 Two retrieval modes over one clinical backend:
 
 - **Mode 1 — Diagnostic triage (Graph RAG).** A multi-turn interview that traverses a
