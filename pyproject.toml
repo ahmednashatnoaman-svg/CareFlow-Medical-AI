@@ -31,10 +31,11 @@ dependencies = [
     "qdrant-client>=1.8.0",
     "networkx>=3.2.0",
     "pandas>=2.2.0",
-    # LLM providers
+    # LLM providers -- no OpenAI provider or key: Groq serves the same OSS model over an
+    # OpenAI-compatible endpoint, so langchain-openai (the client) stays below, but the
+    # openai SDK / API key does not.
     "google-genai>=1.0.0",
     "groq>=0.9.0",
-    "openai>=1.0.0",
     "langchain-core>=0.1.0",
     "langchain>=0.1.0",
     "langchain-openai>=0.1.0",
